@@ -11,29 +11,29 @@ import (
 	"github.com/google/uuid"
 )
 
-type IncomeHandler struct {
-	incomeService services.IncomeService
+type ExpenseHandler struct {
+	expenseService services.ExpenseService
 }
 
-func NewIncomeHandler(incomeService services.IncomeService) *IncomeHandler {
-	return &IncomeHandler{
-		incomeService: incomeService,
+func NewExpenseHandler(expenseService services.ExpenseService) *ExpenseHandler {
+	return &ExpenseHandler{
+		expenseService: expenseService,
 	}
 }
 
-// CreateIncome godoc
-// @Summary Create new income
-// @Description Create a new income and automatically allocate budget to categories
-// @Tags income
+// CreateExpense godoc
+// @Summary Create new expense
+// @Description Create a new expense and update category budget
+// @Tags expenses
 // @Accept json
 // @Produce json
-// @Param income body CreateIncomeRequest true "Income data"
-// @Success 201 {object} CreateIncomeResponse
+// @Param expense body CreateExpenseRequest true "Expense data"
+// @Success 201 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/incomes [post]
-func (h *IncomeHandler) CreateIncome(c *gin.Context) {
-	var req CreateIncomeRequest
+// @Router /api/v1/expenses [post]
+func (h *ExpenseHandler) CreateExpense(c *gin.Context) {
+	var req CreateExpenseRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
@@ -43,19 +43,12 @@ func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 		return
 	}
 
-	// Validate
-	if req.Source == "" {
+	// Parse category ID
+	categoryID, err := uuid.Parse(req.CategoryID)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Success: false,
-			Error:   "source is required",
-		})
-		return
-	}
-
-	if req.Amount <= 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Success: false,
-			Error:   "amount must be greater than 0",
+			Error:   "invalid category ID format",
 		})
 		return
 	}
@@ -70,70 +63,68 @@ func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 		return
 	}
 
-	income := &models.Income{
-		Source:      req.Source,
+	expense := &models.Expense{
+		CategoryID:  categoryID,
 		Amount:      req.Amount,
 		Date:        date,
 		Description: req.Description,
 	}
 
-	createdIncome, allocations, err := h.incomeService.CreateIncome(income)
+	createdExpense, err := h.expenseService.CreateExpense(expense)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Success: false,
 			Error:   err.Error(),
 		})
 		return
 	}
 
-	// Build allocation summary
-	allocationSummaries := make([]AllocationSummary, 0, len(allocations))
-	for _, alloc := range allocations {
-		allocationSummaries = append(allocationSummaries, AllocationSummary{
-			Category:  alloc.Category.Name,
-			Allocated: alloc.AllocatedAmount,
-		})
-	}
-
-	response := CreateIncomeResponse{
-		Income:      createdIncome,
-		Allocations: allocationSummaries,
-	}
-
 	c.JSON(http.StatusCreated, models.Response{
 		Success: true,
-		Message: "Income created and budget allocated successfully",
-		Data:    response,
+		Message: "Expense created successfully",
+		Data:    createdExpense,
 	})
 }
 
-// GetIncomes godoc
-// @Summary Get all incomes
-// @Description Get all incomes with pagination
-// @Tags income
+// GetExpenses godoc
+// @Summary Get all expenses
+// @Description Get all expenses with pagination and filtering
+// @Tags expenses
 // @Produce json
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
+// @Param category_id query string false "Filter by category ID"
 // @Param month query int false "Month (1-12)"
 // @Param year query int false "Year"
 // @Success 200 {object} models.Response
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/incomes [get]
-func (h *IncomeHandler) GetIncomes(c *gin.Context) {
+// @Router /api/v1/expenses [get]
+func (h *ExpenseHandler) GetExpenses(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	categoryIDStr := c.Query("category_id")
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")
 
-	var incomes []models.Income
+	var expenses []models.Expense
 	var err error
 
 	if monthStr != "" && yearStr != "" {
 		month, _ := strconv.Atoi(monthStr)
 		year, _ := strconv.Atoi(yearStr)
-		incomes, err = h.incomeService.GetIncomesByMonthYear(month, year)
+		expenses, err = h.expenseService.GetExpensesByMonthYear(month, year)
+	} else if categoryIDStr != "" {
+		categoryID, err := uuid.Parse(categoryIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Success: false,
+				Error:   "invalid category ID format",
+			})
+			return
+		}
+		expenses, err = h.expenseService.GetExpensesByCategory(categoryID, limit, offset)
 	} else {
-		incomes, err = h.incomeService.GetAllIncomes(limit, offset)
+		expenses, err = h.expenseService.GetAllExpenses(limit, offset)
 	}
 
 	if err != nil {
@@ -146,22 +137,22 @@ func (h *IncomeHandler) GetIncomes(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,
-		Message: "Incomes retrieved successfully",
-		Data:    incomes,
+		Message: "Expenses retrieved successfully",
+		Data:    expenses,
 	})
 }
 
-// GetIncomeByID godoc
-// @Summary Get income by ID
-// @Description Get a specific income by ID
-// @Tags income
+// GetExpenseByID godoc
+// @Summary Get expense by ID
+// @Description Get a specific expense by ID
+// @Tags expenses
 // @Produce json
-// @Param id path string true "Income ID"
+// @Param id path string true "Expense ID"
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 404 {object} models.ErrorResponse
-// @Router /api/v1/incomes/{id} [get]
-func (h *IncomeHandler) GetIncomeByID(c *gin.Context) {
+// @Router /api/v1/expenses/{id} [get]
+func (h *ExpenseHandler) GetExpenseByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -172,33 +163,33 @@ func (h *IncomeHandler) GetIncomeByID(c *gin.Context) {
 		return
 	}
 
-	income, err := h.incomeService.GetIncomeByID(id)
+	expense, err := h.expenseService.GetExpenseByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{
 			Success: false,
-			Error:   "income not found",
+			Error:   "expense not found",
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,
-		Message: "Income retrieved successfully",
-		Data:    income,
+		Message: "Expense retrieved successfully",
+		Data:    expense,
 	})
 }
 
-// DeleteIncome godoc
-// @Summary Delete income
-// @Description Delete income by ID
-// @Tags income
+// DeleteExpense godoc
+// @Summary Delete expense
+// @Description Delete expense by ID
+// @Tags expenses
 // @Produce json
-// @Param id path string true "Income ID"
+// @Param id path string true "Expense ID"
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/incomes/{id} [delete]
-func (h *IncomeHandler) DeleteIncome(c *gin.Context) {
+// @Router /api/v1/expenses/{id} [delete]
+func (h *ExpenseHandler) DeleteExpense(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -209,7 +200,7 @@ func (h *IncomeHandler) DeleteIncome(c *gin.Context) {
 		return
 	}
 
-	if err := h.incomeService.DeleteIncome(id); err != nil {
+	if err := h.expenseService.DeleteExpense(id); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Success: false,
 			Error:   err.Error(),
@@ -219,24 +210,14 @@ func (h *IncomeHandler) DeleteIncome(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,
-		Message: "Income deleted successfully",
+		Message: "Expense deleted successfully",
 	})
 }
 
-// Request/Response DTOs
-type CreateIncomeRequest struct {
-	Source      string  `json:"source" binding:"required"`
+// Request DTOs
+type CreateExpenseRequest struct {
+	CategoryID  string  `json:"category_id" binding:"required"`
 	Amount      float64 `json:"amount" binding:"required"`
 	Date        string  `json:"date" binding:"required"`
 	Description string  `json:"description"`
-}
-
-type CreateIncomeResponse struct {
-	Income      *models.Income      `json:"income"`
-	Allocations []AllocationSummary `json:"allocations"`
-}
-
-type AllocationSummary struct {
-	Category  string  `json:"category"`
-	Allocated float64 `json:"allocated"`
 }

@@ -1,62 +1,83 @@
 package database
 
 import (
-	"database/sql"
+	"finance-tracking-app/config"
+	"finance-tracking-app/models"
+	"fmt"
 	"log"
 
-	_ "modernc.org/sqlite"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-var DB *sql.DB
+var DB *gorm.DB
 
-// InitDB initializes the database connection
+// InitDB initializes the database connection and runs migrations
 func InitDB() {
-	var err error
-	DB, err = sql.Open("sqlite", "./finance_tracking.db")
-	if err != nil {
-		log.Fatal("Failed to open database:", err)
-	}
+	cfg := config.AppConfig
 
-	// Test connection
-	err = DB.Ping()
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName,
+	)
+
+	var err error
+	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
+
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
 	log.Println("Database connected successfully")
 
-	// Create tables
-	createTables()
+	// Run migrations
+	runMigrations()
 }
 
-// createTables creates necessary tables if they don't exist
-func createTables() {
-	query := `
-	CREATE TABLE IF NOT EXISTS transactions (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		title TEXT NOT NULL,
-		amount REAL NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
-		category TEXT NOT NULL,
-		description TEXT,
-		date TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-	`
+// runMigrations automatically migrates database schema
+func runMigrations() {
+	err := DB.AutoMigrate(
+		&models.Income{},
+		&models.ExpenseCategory{},
+		&models.CategoryBudget{},
+		&models.Expense{},
+		&models.BudgetAllocation{},
+	)
 
-	_, err := DB.Exec(query)
 	if err != nil {
-		log.Fatal("Failed to create tables:", err)
+		log.Fatal("Failed to run migrations:", err)
 	}
 
-	log.Println("Tables created successfully")
+	log.Println("Database migrations completed successfully")
+
+	// Add unique constraint for CategoryBudget
+	DB.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_category_budget_unique 
+		ON category_budgets(category_id, month, year)
+	`)
+}
+
+// GetDB returns the database instance
+func GetDB() *gorm.DB {
+	return DB
 }
 
 // CloseDB closes the database connection
 func CloseDB() {
-	if DB != nil {
-		DB.Close()
-		log.Println("Database connection closed")
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Println("Error getting database instance:", err)
+		return
 	}
+
+	err = sqlDB.Close()
+	if err != nil {
+		log.Println("Error closing database:", err)
+		return
+	}
+
+	log.Println("Database connection closed")
 }

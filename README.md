@@ -1,4 +1,4 @@
-# 📊 Finance Tracking App - Panduan Lengkap
+# Finance Tracking API
 
 ## Daftar Isi
 1. [Pengenalan](#pengenalan)
