@@ -31,7 +31,7 @@ func NewCategoryHandler(categoryService services.CategoryService) *CategoryHandl
 // @Success 201 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/categories [post]
+// @Router /categories [post]
 func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 	var req CreateCategoryRequest
 
@@ -84,7 +84,7 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 // @Param active query boolean false "Filter active only"
 // @Success 200 {object} models.Response
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/categories [get]
+// @Router /categories [get]
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
 	activeOnly := c.Query("active") == "true"
 
@@ -121,7 +121,7 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 404 {object} models.ErrorResponse
-// @Router /api/v1/categories/{id} [get]
+// @Router /categories/{id} [get]
 func (h *CategoryHandler) GetCategoryByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -160,7 +160,7 @@ func (h *CategoryHandler) GetCategoryByID(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/categories/{id} [put]
+// @Router /categories/{id} [patch]
 func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -223,7 +223,7 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/categories/{id} [delete]
+// @Router /categories/{id} [delete]
 func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

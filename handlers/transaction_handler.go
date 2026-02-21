@@ -31,7 +31,7 @@ func NewIncomeHandler(incomeService services.IncomeService) *IncomeHandler {
 // @Success 201 {object} CreateIncomeResponse
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/incomes [post]
+// @Router /incomes [post]
 func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 	var req CreateIncomeRequest
 
@@ -118,7 +118,7 @@ func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 // @Param year query int false "Year"
 // @Success 200 {object} models.Response
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/incomes [get]
+// @Router /incomes [get]
 func (h *IncomeHandler) GetIncomes(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -160,7 +160,7 @@ func (h *IncomeHandler) GetIncomes(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 404 {object} models.ErrorResponse
-// @Router /api/v1/incomes/{id} [get]
+// @Router /incomes/{id} [get]
 func (h *IncomeHandler) GetIncomeByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -188,6 +188,102 @@ func (h *IncomeHandler) GetIncomeByID(c *gin.Context) {
 	})
 }
 
+// UpdateIncome godoc
+// @Summary Update income
+// @Description Update income by ID and re-calculate allocations
+// @Tags income
+// @Accept json
+// @Produce json
+// @Param id path string true "Income ID"
+// @Param income body CreateIncomeRequest true "Updated income data"
+// @Success 200 {object} CreateIncomeResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /incomes/{id} [patch]
+func (h *IncomeHandler) UpdateIncome(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid ID format",
+		})
+		return
+	}
+
+	var req CreateIncomeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Validate
+	if req.Source == "" {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "source is required",
+		})
+		return
+	}
+
+	if req.Amount <= 0 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "amount must be greater than 0",
+		})
+		return
+	}
+
+	// Parse date
+	date, err := time.Parse(time.RFC3339, req.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid date format, use RFC3339",
+		})
+		return
+	}
+
+	income := &models.Income{
+		Source:      req.Source,
+		Amount:      req.Amount,
+		Date:        date,
+		Description: req.Description,
+	}
+
+	updatedIncome, allocations, err := h.incomeService.UpdateIncome(id, income)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Build allocation summary
+	allocationSummaries := make([]AllocationSummary, 0, len(allocations))
+	for _, alloc := range allocations {
+		allocationSummaries = append(allocationSummaries, AllocationSummary{
+			Category:  alloc.Category.Name,
+			Allocated: alloc.AllocatedAmount,
+		})
+	}
+
+	response := CreateIncomeResponse{
+		Income:      updatedIncome,
+		Allocations: allocationSummaries,
+	}
+
+	c.JSON(http.StatusOK, models.Response{
+		Success: true,
+		Message: "Income updated and allocations adjusted successfully",
+		Data:    response,
+	})
+}
+
 // DeleteIncome godoc
 // @Summary Delete income
 // @Description Delete income by ID
@@ -197,7 +293,7 @@ func (h *IncomeHandler) GetIncomeByID(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/incomes/{id} [delete]
+// @Router /incomes/{id} [delete]
 func (h *IncomeHandler) DeleteIncome(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

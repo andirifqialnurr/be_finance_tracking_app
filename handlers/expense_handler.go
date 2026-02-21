@@ -31,7 +31,7 @@ func NewExpenseHandler(expenseService services.ExpenseService) *ExpenseHandler {
 // @Success 201 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/expenses [post]
+// @Router /expenses [post]
 func (h *ExpenseHandler) CreateExpense(c *gin.Context) {
 	var req CreateExpenseRequest
 
@@ -98,7 +98,7 @@ func (h *ExpenseHandler) CreateExpense(c *gin.Context) {
 // @Param year query int false "Year"
 // @Success 200 {object} models.Response
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/expenses [get]
+// @Router /expenses [get]
 func (h *ExpenseHandler) GetExpenses(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -151,7 +151,7 @@ func (h *ExpenseHandler) GetExpenses(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 404 {object} models.ErrorResponse
-// @Router /api/v1/expenses/{id} [get]
+// @Router /expenses/{id} [get]
 func (h *ExpenseHandler) GetExpenseByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -179,6 +179,81 @@ func (h *ExpenseHandler) GetExpenseByID(c *gin.Context) {
 	})
 }
 
+// UpdateExpense godoc
+// @Summary Update expense
+// @Description Update expense by ID and adjust category budget
+// @Tags expenses
+// @Accept json
+// @Produce json
+// @Param id path string true "Expense ID"
+// @Param expense body CreateExpenseRequest true "Updated expense data"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /expenses/{id} [patch]
+func (h *ExpenseHandler) UpdateExpense(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid ID format",
+		})
+		return
+	}
+
+	var req CreateExpenseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Parse category ID
+	categoryID, err := uuid.Parse(req.CategoryID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid category ID format",
+		})
+		return
+	}
+
+	// Parse date
+	date, err := time.Parse(time.RFC3339, req.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid date format, use RFC3339",
+		})
+		return
+	}
+
+	expense := &models.Expense{
+		CategoryID:  categoryID,
+		Amount:      req.Amount,
+		Date:        date,
+		Description: req.Description,
+	}
+
+	updatedExpense, err := h.expenseService.UpdateExpense(id, expense)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.Response{
+		Success: true,
+		Message: "Expense updated successfully",
+		Data:    updatedExpense,
+	})
+}
+
 // DeleteExpense godoc
 // @Summary Delete expense
 // @Description Delete expense by ID
@@ -188,7 +263,7 @@ func (h *ExpenseHandler) GetExpenseByID(c *gin.Context) {
 // @Success 200 {object} models.Response
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/expenses/{id} [delete]
+// @Router /expenses/{id} [delete]
 func (h *ExpenseHandler) DeleteExpense(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

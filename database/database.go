@@ -45,6 +45,8 @@ func runMigrations() {
 		&models.CategoryBudget{},
 		&models.Expense{},
 		&models.BudgetAllocation{},
+		&models.BudgetReallocation{},
+		&models.BudgetAlert{},
 	)
 
 	if err != nil {

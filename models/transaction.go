@@ -38,7 +38,7 @@ type ExpenseCategory struct {
 	MonthlyBudget      float64        `gorm:"type:decimal(15,2);not null" json:"monthly_budget"`
 	AllocationPriority int            `gorm:"not null;default:1" json:"allocation_priority"`
 	IsActive           bool           `gorm:"not null;default:true" json:"is_active"`
-	Metadata           datatypes.JSON `gorm:"type:jsonb" json:"metadata"`
+	Metadata           datatypes.JSON `gorm:"type:jsonb" json:"metadata" swaggertype:"object"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 
@@ -119,6 +119,52 @@ type BudgetAllocation struct {
 
 // BeforeCreate hook to generate UUID
 func (ba *BudgetAllocation) BeforeCreate(tx *gorm.DB) error {
+	if ba.ID == uuid.Nil {
+		ba.ID = uuid.New()
+	}
+	return nil
+}
+
+// BudgetReallocation represents manual budget reallocation between categories
+type BudgetReallocation struct {
+	ID             uuid.UUID `gorm:"type:uuid;primary_key;" json:"id"`
+	FromCategoryID uuid.UUID `gorm:"type:uuid;not null" json:"from_category_id"`
+	ToCategoryID   uuid.UUID `gorm:"type:uuid;not null" json:"to_category_id"`
+	Amount         float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
+	Reason         string    `gorm:"type:text" json:"reason"`
+	Month          int       `gorm:"not null" json:"month"`
+	Year           int       `gorm:"not null" json:"year"`
+	CreatedAt      time.Time `json:"created_at"`
+
+	// Relations
+	FromCategory ExpenseCategory `gorm:"foreignKey:FromCategoryID" json:"from_category,omitempty"`
+	ToCategory   ExpenseCategory `gorm:"foreignKey:ToCategoryID" json:"to_category,omitempty"`
+}
+
+// BeforeCreate hook to generate UUID
+func (br *BudgetReallocation) BeforeCreate(tx *gorm.DB) error {
+	if br.ID == uuid.Nil {
+		br.ID = uuid.New()
+	}
+	return nil
+}
+
+// BudgetAlert represents alert configuration per category
+type BudgetAlert struct {
+	ID                  uuid.UUID  `gorm:"type:uuid;primary_key;" json:"id"`
+	CategoryID          uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex" json:"category_id"`
+	ThresholdPercentage int        `gorm:"not null;default:80" json:"threshold_percentage"`
+	IsEnabled           bool       `gorm:"not null;default:true" json:"is_enabled"`
+	LastTriggered       *time.Time `json:"last_triggered,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+
+	// Relations
+	Category ExpenseCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+}
+
+// BeforeCreate hook to generate UUID
+func (ba *BudgetAlert) BeforeCreate(tx *gorm.DB) error {
 	if ba.ID == uuid.Nil {
 		ba.ID = uuid.New()
 	}

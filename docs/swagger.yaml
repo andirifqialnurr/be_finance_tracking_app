@@ -1,0 +1,1353 @@
+basePath: /api/v1
+definitions:
+  handlers.AllocationSummary:
+    properties:
+      allocated:
+        type: number
+      category:
+        type: string
+    type: object
+  handlers.CreateAlertRequest:
+    properties:
+      category_id:
+        type: string
+      is_enabled:
+        type: boolean
+      threshold_percentage:
+        maximum: 100
+        minimum: 0
+        type: integer
+    required:
+    - category_id
+    - threshold_percentage
+    type: object
+  handlers.CreateCategoryRequest:
+    properties:
+      allocation_priority:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      monthly_budget:
+        type: number
+      name:
+        type: string
+      type:
+        type: string
+    required:
+    - monthly_budget
+    - name
+    - type
+    type: object
+  handlers.CreateExpenseRequest:
+    properties:
+      amount:
+        type: number
+      category_id:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+    required:
+    - amount
+    - category_id
+    - date
+    type: object
+  handlers.CreateIncomeRequest:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      description:
+        type: string
+      source:
+        type: string
+    required:
+    - amount
+    - date
+    - source
+    type: object
+  handlers.CreateIncomeResponse:
+    properties:
+      allocations:
+        items:
+          $ref: '#/definitions/handlers.AllocationSummary'
+        type: array
+      income:
+        $ref: '#/definitions/models.Income'
+    type: object
+  handlers.ReallocateBudgetRequest:
+    properties:
+      amount:
+        type: number
+      from_category_id:
+        type: string
+      month:
+        type: integer
+      reason:
+        type: string
+      to_category_id:
+        type: string
+      year:
+        type: integer
+    required:
+    - amount
+    - from_category_id
+    - to_category_id
+    type: object
+  handlers.UpdateAlertRequest:
+    properties:
+      is_enabled:
+        type: boolean
+      threshold_percentage:
+        maximum: 100
+        minimum: 0
+        type: integer
+    required:
+    - threshold_percentage
+    type: object
+  handlers.UpdateCategoryRequest:
+    properties:
+      allocation_priority:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      monthly_budget:
+        type: number
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  models.BudgetAllocation:
+    properties:
+      allocated_amount:
+        type: number
+      category:
+        $ref: '#/definitions/models.ExpenseCategory'
+      category_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      income:
+        allOf:
+        - $ref: '#/definitions/models.Income'
+        description: Relations
+      income_id:
+        type: string
+      month:
+        type: integer
+      year:
+        type: integer
+    type: object
+  models.CategoryBudget:
+    properties:
+      allocated_amount:
+        type: number
+      category:
+        allOf:
+        - $ref: '#/definitions/models.ExpenseCategory'
+        description: Relations
+      category_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      month:
+        description: 1-12
+        type: integer
+      remaining_amount:
+        type: number
+      spent_amount:
+        type: number
+      updated_at:
+        type: string
+      year:
+        type: integer
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        type: string
+      success:
+        type: boolean
+    type: object
+  models.Expense:
+    properties:
+      amount:
+        type: number
+      category:
+        allOf:
+        - $ref: '#/definitions/models.ExpenseCategory'
+        description: Relations
+      category_id:
+        type: string
+      created_at:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ExpenseCategory:
+    properties:
+      allocation_priority:
+        type: integer
+      allocations:
+        items:
+          $ref: '#/definitions/models.BudgetAllocation'
+        type: array
+      budgets:
+        description: Relations
+        items:
+          $ref: '#/definitions/models.CategoryBudget'
+        type: array
+      created_at:
+        type: string
+      expenses:
+        items:
+          $ref: '#/definitions/models.Expense'
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      metadata:
+        type: object
+      monthly_budget:
+        type: number
+      name:
+        type: string
+      type:
+        description: SUBSCRIPTION, DAILY_CONTINUOUS, USAGE_BASED, ONE_TIME
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.Income:
+    properties:
+      allocations:
+        description: Relations
+        items:
+          $ref: '#/definitions/models.BudgetAllocation'
+        type: array
+      amount:
+        type: number
+      created_at:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      source:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.Response:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  services.Pagination:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  services.Transaction:
+    properties:
+      amount:
+        type: number
+      category:
+        $ref: '#/definitions/models.ExpenseCategory'
+      created_at:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      source:
+        type: string
+      type:
+        description: '"income" or "expense"'
+        type: string
+    type: object
+  services.TransactionResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/services.Transaction'
+        type: array
+      pagination:
+        $ref: '#/definitions/services.Pagination'
+      summary:
+        $ref: '#/definitions/services.TransactionSummary'
+    type: object
+  services.TransactionSummary:
+    properties:
+      net_balance:
+        type: number
+      total_expense:
+        type: number
+      total_income:
+        type: number
+    type: object
+host: localhost:8081
+info:
+  contact:
+    email: support@financeapp.com
+    name: API Support
+    url: https://github.com/yourusername/finance-tracking-app
+  description: A comprehensive personal finance tracking application API with budget
+    management, expense tracking, and analytics
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Finance Tracking API
+  version: "1.0"
+paths:
+  /alerts:
+    get:
+      description: Get all budget alerts with current status
+      parameters:
+      - description: 'Filter by status: active or all (default: all)'
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get all budget alerts
+      tags:
+      - alerts
+    post:
+      consumes:
+      - application/json
+      description: Create a new budget alert for a category
+      parameters:
+      - description: Alert data
+        in: body
+        name: alert
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAlertRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create a new budget alert
+      tags:
+      - alerts
+  /alerts/{id}:
+    delete:
+      description: Delete budget alert by ID
+      parameters:
+      - description: Alert ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete budget alert
+      tags:
+      - alerts
+    patch:
+      consumes:
+      - application/json
+      description: Update budget alert configuration
+      parameters:
+      - description: Alert ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Alert data
+        in: body
+        name: alert
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAlertRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update budget alert
+      tags:
+      - alerts
+  /analytics/budget-performance:
+    get:
+      description: Get budget performance metrics for the entire year
+      parameters:
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get budget performance analysis
+      tags:
+      - analytics
+  /analytics/category-comparison:
+    get:
+      description: Compare spending across categories for current vs previous month
+      parameters:
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Compare category spending between months
+      tags:
+      - analytics
+  /analytics/spending-pattern:
+    get:
+      description: Get spending pattern for a specific category over multiple months
+      parameters:
+      - description: Category ID (optional)
+        in: query
+        name: category_id
+        type: string
+      - description: 'Number of months (default: 6)'
+        in: query
+        name: months
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get spending pattern for a category
+      tags:
+      - analytics
+  /analytics/top-spending:
+    get:
+      description: Get categories with highest spending for a specific month
+      parameters:
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      - description: 'Number of categories to return (default: 5)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get top spending categories
+      tags:
+      - analytics
+  /budgets:
+    get:
+      description: Get all budget summaries for a specific month and year
+      parameters:
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get budgets by month and year
+      tags:
+      - budgets
+  /budgets/reallocate:
+    post:
+      consumes:
+      - application/json
+      description: Manually reallocate budget from one category to another
+      parameters:
+      - description: Reallocation data
+        in: body
+        name: reallocation
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReallocateBudgetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Reallocate budget between categories
+      tags:
+      - budgets
+  /budgets/reallocate/{id}:
+    delete:
+      description: Cancel/delete a budget reallocation and restore budgets to previous
+        state
+      parameters:
+      - description: Reallocation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Cancel a budget reallocation
+      tags:
+      - budgets
+  /budgets/reallocations:
+    get:
+      description: Get history of budget reallocations for a specific month/year
+      parameters:
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get budget reallocation history
+      tags:
+      - budgets
+  /budgets/summary:
+    get:
+      description: Get overall budget summary for a specific month and year
+      parameters:
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get overall budget summary
+      tags:
+      - budgets
+  /categories:
+    get:
+      description: Get all expense categories
+      parameters:
+      - description: Filter active only
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get all categories
+      tags:
+      - categories
+    post:
+      consumes:
+      - application/json
+      description: Create a new expense category
+      parameters:
+      - description: Category data
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create new expense category
+      tags:
+      - categories
+  /categories/{id}:
+    delete:
+      description: Delete category by ID (hard delete)
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete category
+      tags:
+      - categories
+    get:
+      description: Get a specific category by ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get category by ID
+      tags:
+      - categories
+    patch:
+      consumes:
+      - application/json
+      description: Update an existing category
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category data
+        in: body
+        name: category
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update category
+      tags:
+      - categories
+  /expenses:
+    get:
+      description: Get all expenses with pagination and filtering
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by category ID
+        in: query
+        name: category_id
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get all expenses
+      tags:
+      - expenses
+    post:
+      consumes:
+      - application/json
+      description: Create a new expense and update category budget
+      parameters:
+      - description: Expense data
+        in: body
+        name: expense
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateExpenseRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create new expense
+      tags:
+      - expenses
+  /expenses/{id}:
+    delete:
+      description: Delete expense by ID
+      parameters:
+      - description: Expense ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete expense
+      tags:
+      - expenses
+    get:
+      description: Get a specific expense by ID
+      parameters:
+      - description: Expense ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get expense by ID
+      tags:
+      - expenses
+    patch:
+      consumes:
+      - application/json
+      description: Update expense by ID and adjust category budget
+      parameters:
+      - description: Expense ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated expense data
+        in: body
+        name: expense
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateExpenseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update expense
+      tags:
+      - expenses
+  /incomes:
+    get:
+      description: Get all incomes with pagination
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get all incomes
+      tags:
+      - income
+    post:
+      consumes:
+      - application/json
+      description: Create a new income and automatically allocate budget to categories
+      parameters:
+      - description: Income data
+        in: body
+        name: income
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateIncomeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.CreateIncomeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create new income
+      tags:
+      - income
+  /incomes/{id}:
+    delete:
+      description: Delete income by ID
+      parameters:
+      - description: Income ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete income
+      tags:
+      - income
+    get:
+      description: Get a specific income by ID
+      parameters:
+      - description: Income ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get income by ID
+      tags:
+      - income
+    patch:
+      consumes:
+      - application/json
+      description: Update income by ID and re-calculate allocations
+      parameters:
+      - description: Income ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated income data
+        in: body
+        name: income
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateIncomeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.CreateIncomeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update income
+      tags:
+      - income
+  /reports/monthly:
+    get:
+      description: Get comprehensive financial report for a specific month
+      parameters:
+      - description: 'Month (1-12, default: current month)'
+        in: query
+        name: month
+        type: integer
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get monthly financial report
+      tags:
+      - reports
+  /reports/monthly/export:
+    get:
+      description: Export comprehensive financial report for a specific month as PDF
+        or Excel
+      parameters:
+      - description: 'Month (1-12, default: current month)'
+        in: query
+        name: month
+        type: integer
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      - description: 'Export format: pdf or excel'
+        in: query
+        name: format
+        required: true
+        type: string
+      produces:
+      - application/pdf
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Export monthly financial report
+      tags:
+      - reports
+  /reports/yearly:
+    get:
+      description: Get comprehensive financial report for an entire year
+      parameters:
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get yearly financial report
+      tags:
+      - reports
+  /reports/yearly/export:
+    get:
+      description: Export comprehensive financial report for an entire year as PDF
+        or Excel
+      parameters:
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      - description: 'Export format: pdf or excel'
+        in: query
+        name: format
+        required: true
+        type: string
+      produces:
+      - application/pdf
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Export yearly financial report
+      tags:
+      - reports
+  /transactions:
+    get:
+      description: Get combined income and expense transactions with filtering and
+        pagination
+      parameters:
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: 'Transaction type: income, expense, or all (default: all)'
+        in: query
+        name: type
+        type: string
+      - description: Filter by category ID (for expenses)
+        in: query
+        name: category_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Sort by: date_asc, date_desc, amount_asc, amount_desc (default:
+          date_desc)'
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.TransactionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get combined transaction history
+      tags:
+      - transactions
+schemes:
+- http
+- https
+swagger: "2.0"
