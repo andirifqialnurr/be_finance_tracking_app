@@ -70,14 +70,25 @@ func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 		return
 	}
 
+	// Parse account ID
+	accountID, err := uuid.Parse(req.AccountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid account_id format",
+		})
+		return
+	}
+
 	income := &models.Income{
+		AccountID:   accountID,
 		Source:      req.Source,
 		Amount:      req.Amount,
 		Date:        date,
 		Description: req.Description,
 	}
 
-	createdIncome, allocations, err := h.incomeService.CreateIncome(income)
+	createResult, err := h.incomeService.CreateIncome(income)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Success: false,
@@ -87,8 +98,8 @@ func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 	}
 
 	// Build allocation summary
-	allocationSummaries := make([]AllocationSummary, 0, len(allocations))
-	for _, alloc := range allocations {
+	allocationSummaries := make([]AllocationSummary, 0, len(createResult.Allocations))
+	for _, alloc := range createResult.Allocations {
 		allocationSummaries = append(allocationSummaries, AllocationSummary{
 			Category:  alloc.Category.Name,
 			Allocated: alloc.AllocatedAmount,
@@ -96,13 +107,20 @@ func (h *IncomeHandler) CreateIncome(c *gin.Context) {
 	}
 
 	response := CreateIncomeResponse{
-		Income:      createdIncome,
+		Income:      createResult.Income,
 		Allocations: allocationSummaries,
+	}
+
+	msg := "Income created and balance updated successfully"
+	if createResult.AlreadyAllocatedWarning {
+		msg = "Income created. Budget already allocated for this month; no new allocation made."
+	} else if len(allocationSummaries) > 0 {
+		msg = "Income created and budget allocated successfully"
 	}
 
 	c.JSON(http.StatusCreated, models.Response{
 		Success: true,
-		Message: "Income created and budget allocated successfully",
+		Message: msg,
 		Data:    response,
 	})
 }
@@ -247,14 +265,25 @@ func (h *IncomeHandler) UpdateIncome(c *gin.Context) {
 		return
 	}
 
+	// Parse account ID
+	accountID, err := uuid.Parse(req.AccountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid account_id format",
+		})
+		return
+	}
+
 	income := &models.Income{
+		AccountID:   accountID,
 		Source:      req.Source,
 		Amount:      req.Amount,
 		Date:        date,
 		Description: req.Description,
 	}
 
-	updatedIncome, allocations, err := h.incomeService.UpdateIncome(id, income)
+	updateResult, err := h.incomeService.UpdateIncome(id, income)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Success: false,
@@ -264,8 +293,8 @@ func (h *IncomeHandler) UpdateIncome(c *gin.Context) {
 	}
 
 	// Build allocation summary
-	allocationSummaries := make([]AllocationSummary, 0, len(allocations))
-	for _, alloc := range allocations {
+	allocationSummaries := make([]AllocationSummary, 0, len(updateResult.Allocations))
+	for _, alloc := range updateResult.Allocations {
 		allocationSummaries = append(allocationSummaries, AllocationSummary{
 			Category:  alloc.Category.Name,
 			Allocated: alloc.AllocatedAmount,
@@ -273,7 +302,7 @@ func (h *IncomeHandler) UpdateIncome(c *gin.Context) {
 	}
 
 	response := CreateIncomeResponse{
-		Income:      updatedIncome,
+		Income:      updateResult.Income,
 		Allocations: allocationSummaries,
 	}
 
@@ -321,6 +350,7 @@ func (h *IncomeHandler) DeleteIncome(c *gin.Context) {
 
 // Request/Response DTOs
 type CreateIncomeRequest struct {
+	AccountID   string  `json:"account_id" binding:"required"`
 	Source      string  `json:"source" binding:"required"`
 	Amount      float64 `json:"amount" binding:"required"`
 	Date        string  `json:"date" binding:"required"`

@@ -1,173 +1,177 @@
 package services
 
 import (
-	"finance-tracking-app/models"
-	"finance-tracking-app/repositories"
-	"finance-tracking-app/services"
-	"finance-tracking-app/test/helpers"
-	"testing"
-	"time"
+"finance-tracking-app/models"
+"finance-tracking-app/repositories"
+"finance-tracking-app/services"
+"finance-tracking-app/test/helpers"
+"testing"
+"time"
 
-	"github.com/stretchr/testify/assert"
+"github.com/stretchr/testify/assert"
 )
 
+// createSalaryCardAccount creates a CARD account with SALARY income type and the given balance.
+func createSalaryCardAccount(t *testing.T, accountRepo repositories.AccountRepository, balance float64) *models.Account {
+t.Helper()
+incomeType := models.CardIncomeTypeSalary
+acc := &models.Account{
+Name:       "Salary Card",
+Type:       models.AccountTypeCard,
+IncomeType: &incomeType,
+Balance:    balance,
+IsActive:   true,
+}
+if err := accountRepo.Create(acc); err != nil {
+t.Fatalf("failed to create salary card account: %v", err)
+}
+return acc
+}
+
 func TestIncomeService_CreateIncome_WithAutoAllocation(t *testing.T) {
-	// Setup
-	db := helpers.SetupTestDB(t)
-	defer helpers.CleanupTestDB(t, db)
+db := helpers.SetupTestDB(t)
+defer helpers.CleanupTestDB(t, db)
 
-	// Setup repositories
-	incomeRepo := repositories.NewIncomeRepository(db)
-	categoryRepo := repositories.NewExpenseCategoryRepository(db)
-	budgetRepo := repositories.NewCategoryBudgetRepository(db)
-	allocationRepo := repositories.NewBudgetAllocationRepository(db)
+incomeRepo := repositories.NewIncomeRepository(db)
+categoryRepo := repositories.NewExpenseCategoryRepository(db)
+budgetRepo := repositories.NewCategoryBudgetRepository(db)
+allocationRepo := repositories.NewBudgetAllocationRepository(db)
+accountRepo := repositories.NewAccountRepository(db)
 
-	// Create service
-	incomeService := services.NewIncomeService(incomeRepo, categoryRepo, budgetRepo, allocationRepo, db)
+incomeService := services.NewIncomeService(incomeRepo, accountRepo, categoryRepo, budgetRepo, allocationRepo, db)
 
-	// Seed categories
-	categories := []models.ExpenseCategory{
-		{Name: "Category 1", Type: models.CategoryTypeSubscription, MonthlyBudget: 100000, AllocationPriority: 1, IsActive: true},
-		{Name: "Category 2", Type: models.CategoryTypeUsageBased, MonthlyBudget: 50000, AllocationPriority: 2, IsActive: true},
-	}
+// SALARY CARD account — auto-allocation will be triggered
+account := createSalaryCardAccount(t, accountRepo, 0)
 
-	for _, cat := range categories {
-		categoryRepo.Create(&cat)
-	}
+categories := []models.ExpenseCategory{
+{Name: "Category 1", Type: models.CategoryTypeSubscription, MonthlyBudget: 100000, AllocationPriority: 1, IsActive: true},
+{Name: "Category 2", Type: models.CategoryTypeUsageBased, MonthlyBudget: 50000, AllocationPriority: 2, IsActive: true},
+}
+for i := range categories {
+categoryRepo.Create(&categories[i])
+}
 
-	// Test income creation
-	income := &models.Income{
-		Source:      "Test Income",
-		Amount:      300000,
-		Date:        time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),
-		Description: "Test description",
-	}
+income := &models.Income{
+AccountID:   account.ID,
+Source:      "Test Income",
+Amount:      300000,
+Date:        time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),
+Description: "Test description",
+}
 
-	// Execute
-	createdIncome, allocations, err := incomeService.CreateIncome(income)
+result, err := incomeService.CreateIncome(income)
 
-	// Assert
-	assert.NoError(t, err)
-	assert.NotNil(t, createdIncome)
-	assert.Len(t, allocations, 2) // Should allocate to 2 categories
+assert.NoError(t, err)
+assert.NotNil(t, result)
+assert.Len(t, result.Allocations, 2)
+assert.False(t, result.AlreadyAllocatedWarning)
 
-	// Verify allocations proportions
-	totalAllocated := 0.0
-	for _, allocation := range allocations {
-		totalAllocated += allocation.AllocatedAmount
-	}
+totalAllocated := 0.0
+for _, allocation := range result.Allocations {
+totalAllocated += allocation.AllocatedAmount
+}
+assert.InDelta(t, income.Amount, totalAllocated, 0.01)
 
-	// Total allocated should be close to income amount (accounting for float precision)
-	assert.InDelta(t, income.Amount, totalAllocated, 0.01)
+budgets, err := budgetRepo.FindByMonthYear(2, 2026)
+assert.NoError(t, err)
+assert.Len(t, budgets, 2)
 
-	// Verify category budgets were created
-	month := 2
-	year := 2026
-	budgets, err := budgetRepo.FindByMonthYear(month, year)
-	assert.NoError(t, err)
-	assert.Len(t, budgets, 2)
-
-	// Verify proportional allocation
-	for _, budget := range budgets {
-		assert.Greater(t, budget.AllocatedAmount, 0.0)
-		assert.Equal(t, budget.AllocatedAmount, budget.RemainingAmount)
-		assert.Equal(t, 0.0, budget.SpentAmount)
-	}
+for _, budget := range budgets {
+assert.Greater(t, budget.AllocatedAmount, 0.0)
+assert.Equal(t, budget.AllocatedAmount, budget.RemainingAmount)
+assert.Equal(t, 0.0, budget.SpentAmount)
+}
 }
 
 func TestIncomeService_CreateIncome_NoActiveCategories(t *testing.T) {
-	// Setup
-	db := helpers.SetupTestDB(t)
-	defer helpers.CleanupTestDB(t, db)
+db := helpers.SetupTestDB(t)
+defer helpers.CleanupTestDB(t, db)
 
-	incomeRepo := repositories.NewIncomeRepository(db)
-	categoryRepo := repositories.NewExpenseCategoryRepository(db)
-	budgetRepo := repositories.NewCategoryBudgetRepository(db)
-	allocationRepo := repositories.NewBudgetAllocationRepository(db)
+incomeRepo := repositories.NewIncomeRepository(db)
+categoryRepo := repositories.NewExpenseCategoryRepository(db)
+budgetRepo := repositories.NewCategoryBudgetRepository(db)
+allocationRepo := repositories.NewBudgetAllocationRepository(db)
+accountRepo := repositories.NewAccountRepository(db)
 
-	incomeService := services.NewIncomeService(incomeRepo, categoryRepo, budgetRepo, allocationRepo, db)
+incomeService := services.NewIncomeService(incomeRepo, accountRepo, categoryRepo, budgetRepo, allocationRepo, db)
 
-	// Test income creation without active categories
-	income := &models.Income{
-		Source:      "Test Income",
-		Amount:      300000,
-		Date:        time.Now(),
-		Description: "Test description",
-	}
+// SALARY CARD — auto-allocation attempted but no categories exist
+account := createSalaryCardAccount(t, accountRepo, 0)
 
-	// Execute
-	createdIncome, allocations, err := incomeService.CreateIncome(income)
+income := &models.Income{
+AccountID:   account.ID,
+Source:      "Test Income",
+Amount:      300000,
+Date:        time.Now(),
+Description: "Test description",
+}
 
-	// Assert - should create income but no allocations
-	assert.NoError(t, err)
-	assert.NotNil(t, createdIncome)
-	assert.Len(t, allocations, 0)
+result, err := incomeService.CreateIncome(income)
+
+assert.NoError(t, err)
+assert.NotNil(t, result)
+assert.Empty(t, result.Allocations)
+assert.False(t, result.AlreadyAllocatedWarning)
 }
 
 func TestIncomeService_GetIncomesByMonthYear(t *testing.T) {
-	// Setup
-	db := helpers.SetupTestDB(t)
-	defer helpers.CleanupTestDB(t, db)
+db := helpers.SetupTestDB(t)
+defer helpers.CleanupTestDB(t, db)
 
-	incomeRepo := repositories.NewIncomeRepository(db)
-	categoryRepo := repositories.NewExpenseCategoryRepository(db)
-	budgetRepo := repositories.NewCategoryBudgetRepository(db)
-	allocationRepo := repositories.NewBudgetAllocationRepository(db)
+incomeRepo := repositories.NewIncomeRepository(db)
+categoryRepo := repositories.NewExpenseCategoryRepository(db)
+budgetRepo := repositories.NewCategoryBudgetRepository(db)
+allocationRepo := repositories.NewBudgetAllocationRepository(db)
+accountRepo := repositories.NewAccountRepository(db)
 
-	incomeService := services.NewIncomeService(incomeRepo, categoryRepo, budgetRepo, allocationRepo, db)
+incomeService := services.NewIncomeService(incomeRepo, accountRepo, categoryRepo, budgetRepo, allocationRepo, db)
 
-	// Create incomes for different months
-	incomes := []models.Income{
-		{Source: "Feb Income 1", Amount: 1000000, Date: time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)},
-		{Source: "Feb Income 2", Amount: 2000000, Date: time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC)},
-		{Source: "Mar Income", Amount: 3000000, Date: time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)},
-	}
+incomes := []models.Income{
+{Source: "Feb Income 1", Amount: 1000000, Date: time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)},
+{Source: "Feb Income 2", Amount: 2000000, Date: time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC)},
+{Source: "Mar Income", Amount: 3000000, Date: time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)},
+}
+for i := range incomes {
+incomeRepo.Create(&incomes[i])
+}
 
-	for _, income := range incomes {
-		incomeRepo.Create(&income)
-	}
+found, err := incomeService.GetIncomesByMonthYear(2, 2026)
 
-	// Execute
-	found, err := incomeService.GetIncomesByMonthYear(2, 2026)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Len(t, found, 2)
-
-	for _, income := range found {
-		assert.Equal(t, 2, int(income.Date.Month()))
-		assert.Equal(t, 2026, income.Date.Year())
-	}
+assert.NoError(t, err)
+assert.Len(t, found, 2)
+for _, income := range found {
+assert.Equal(t, 2, int(income.Date.Month()))
+assert.Equal(t, 2026, income.Date.Year())
+}
 }
 
 func TestIncomeService_DeleteIncome(t *testing.T) {
-	// Setup
-	db := helpers.SetupTestDB(t)
-	defer helpers.CleanupTestDB(t, db)
+db := helpers.SetupTestDB(t)
+defer helpers.CleanupTestDB(t, db)
 
-	incomeRepo := repositories.NewIncomeRepository(db)
-	categoryRepo := repositories.NewExpenseCategoryRepository(db)
-	budgetRepo := repositories.NewCategoryBudgetRepository(db)
-	allocationRepo := repositories.NewBudgetAllocationRepository(db)
+incomeRepo := repositories.NewIncomeRepository(db)
+categoryRepo := repositories.NewExpenseCategoryRepository(db)
+budgetRepo := repositories.NewCategoryBudgetRepository(db)
+allocationRepo := repositories.NewBudgetAllocationRepository(db)
+accountRepo := repositories.NewAccountRepository(db)
 
-	incomeService := services.NewIncomeService(incomeRepo, categoryRepo, budgetRepo, allocationRepo, db)
+incomeService := services.NewIncomeService(incomeRepo, accountRepo, categoryRepo, budgetRepo, allocationRepo, db)
 
-	// Create income
-	income := &models.Income{
-		Source: "Test Income",
-		Amount: 1000000,
-		Date:   time.Now(),
-	}
-	incomeRepo.Create(income)
+// Need a real account so DeleteIncome can reverse the balance
+account := createSalaryCardAccount(t, accountRepo, 1000000)
 
-	// Execute
-	err := incomeService.DeleteIncome(income.ID)
+income := &models.Income{
+AccountID: account.ID,
+Source:    "Test Income",
+Amount:    1000000,
+Date:      time.Now(),
+}
+incomeRepo.Create(income)
 
-	// Assert
-	assert.NoError(t, err)
+err := incomeService.DeleteIncome(income.ID)
+assert.NoError(t, err)
 
-	// Verify deletion
-	found, err := incomeRepo.FindByID(income.ID)
-	assert.Error(t, err)
-	assert.Nil(t, found)
+found, err := incomeRepo.FindByID(income.ID)
+assert.Error(t, err)
+assert.Nil(t, found)
 }

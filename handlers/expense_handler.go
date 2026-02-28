@@ -43,6 +43,16 @@ func (h *ExpenseHandler) CreateExpense(c *gin.Context) {
 		return
 	}
 
+	// Parse account ID
+	accountID, err := uuid.Parse(req.AccountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid account_id format",
+		})
+		return
+	}
+
 	// Parse category ID
 	categoryID, err := uuid.Parse(req.CategoryID)
 	if err != nil {
@@ -64,13 +74,14 @@ func (h *ExpenseHandler) CreateExpense(c *gin.Context) {
 	}
 
 	expense := &models.Expense{
+		AccountID:   accountID,
 		CategoryID:  categoryID,
 		Amount:      req.Amount,
 		Date:        date,
 		Description: req.Description,
 	}
 
-	createdExpense, err := h.expenseService.CreateExpense(expense)
+	createResult, err := h.expenseService.CreateExpense(expense)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Success: false,
@@ -79,10 +90,15 @@ func (h *ExpenseHandler) CreateExpense(c *gin.Context) {
 		return
 	}
 
+	msg := "Expense created successfully"
+	if createResult.BudgetWarning != "" {
+		msg = "Expense created. Warning: " + createResult.BudgetWarning
+	}
+
 	c.JSON(http.StatusCreated, models.Response{
 		Success: true,
-		Message: "Expense created successfully",
-		Data:    createdExpense,
+		Message: msg,
+		Data:    createResult.Expense,
 	})
 }
 
@@ -211,6 +227,16 @@ func (h *ExpenseHandler) UpdateExpense(c *gin.Context) {
 		return
 	}
 
+	// Parse account ID
+	accountID, err := uuid.Parse(req.AccountID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Success: false,
+			Error:   "invalid account_id format",
+		})
+		return
+	}
+
 	// Parse category ID
 	categoryID, err := uuid.Parse(req.CategoryID)
 	if err != nil {
@@ -232,13 +258,14 @@ func (h *ExpenseHandler) UpdateExpense(c *gin.Context) {
 	}
 
 	expense := &models.Expense{
+		AccountID:   accountID,
 		CategoryID:  categoryID,
 		Amount:      req.Amount,
 		Date:        date,
 		Description: req.Description,
 	}
 
-	updatedExpense, err := h.expenseService.UpdateExpense(id, expense)
+	updateResult, err := h.expenseService.UpdateExpense(id, expense)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Success: false,
@@ -247,10 +274,15 @@ func (h *ExpenseHandler) UpdateExpense(c *gin.Context) {
 		return
 	}
 
+	msg := "Expense updated successfully"
+	if updateResult.BudgetWarning != "" {
+		msg = "Expense updated. Warning: " + updateResult.BudgetWarning
+	}
+
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,
-		Message: "Expense updated successfully",
-		Data:    updatedExpense,
+		Message: msg,
+		Data:    updateResult.Expense,
 	})
 }
 
@@ -291,6 +323,7 @@ func (h *ExpenseHandler) DeleteExpense(c *gin.Context) {
 
 // Request DTOs
 type CreateExpenseRequest struct {
+	AccountID   string  `json:"account_id" binding:"required"`
 	CategoryID  string  `json:"category_id" binding:"required"`
 	Amount      float64 `json:"amount" binding:"required"`
 	Date        string  `json:"date" binding:"required"`

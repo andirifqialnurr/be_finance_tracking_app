@@ -24,6 +24,358 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/accounts": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Create a new account",
+                "parameters": [
+                    {
+                        "description": "Account data",
+                        "name": "account",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/summary": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Get all accounts overview with total balance",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Get account by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Update account details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Account update data",
+                        "name": "account",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/archive": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Archive an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/spent": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Record an expense from an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Expense data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SpentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/summary": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Get account balance summary for a specific month",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Month (1-12)",
+                        "name": "month",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Year",
+                        "name": "year",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/topup": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Add funds (income) to an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Top-up data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TopUpRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/transfer": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Transfer funds from this account to another",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Transfer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AccountTransferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/transfers": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Get transfer history for a specific account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Month (1-12)",
+                        "name": "month",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Year",
+                        "name": "year",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/alerts": {
             "get": {
                 "description": "Get all budget alerts with current status",
@@ -1283,6 +1635,214 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications/register-device": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Register a device for push notifications (store player ID)",
+                "parameters": [
+                    {
+                        "description": "Device registration data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RegisterDeviceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/settings": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Get all notification settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Create a push notification setting",
+                "parameters": [
+                    {
+                        "description": "Notification setting data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateNotificationSettingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/settings/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Get notification setting by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Setting ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Delete a notification setting",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Setting ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Update a notification setting",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Setting ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateNotificationSettingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/test": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Send a test push notification",
+                "parameters": [
+                    {
+                        "description": "Test notification data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TestNotificationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/reports/monthly": {
             "get": {
                 "description": "Get comprehensive financial report for a specific month",
@@ -1471,6 +2031,216 @@ const docTemplate = `{
                 }
             }
         },
+        "/scheduled-funds": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-funds"
+                ],
+                "summary": "Get all scheduled funds",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Filter active only",
+                        "name": "active_only",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-funds"
+                ],
+                "summary": "Create a recurring scheduled fund",
+                "parameters": [
+                    {
+                        "description": "Scheduled fund data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateScheduledFundRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/scheduled-funds/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-funds"
+                ],
+                "summary": "Get a scheduled fund by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduled Fund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-funds"
+                ],
+                "summary": "Delete a scheduled fund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduled Fund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-funds"
+                ],
+                "summary": "Update a scheduled fund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Scheduled Fund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateScheduledFundRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/monthly": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "statistics"
+                ],
+                "summary": "Get monthly income/expense statistics for a year",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Year (default: current year)",
+                        "name": "year",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/overview": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "statistics"
+                ],
+                "summary": "Get financial overview for a specific month",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Month (1-12, default: current month)",
+                        "name": "month",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Year (default: current year)",
+                        "name": "year",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/transactions": {
             "get": {
                 "description": "Get combined income and expense transactions with filtering and pagination",
@@ -1558,9 +2328,189 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/transfers": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfers"
+                ],
+                "summary": "Get all transfers",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfers"
+                ],
+                "summary": "Transfer funds between accounts",
+                "parameters": [
+                    {
+                        "description": "Transfer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateTransferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfers/account": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfers"
+                ],
+                "summary": "Get transfers for a specific account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "account_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Month (1-12)",
+                        "name": "month",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Year",
+                        "name": "year",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfers/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfers"
+                ],
+                "summary": "Get transfer by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transfer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfers"
+                ],
+                "summary": "Cancel a transfer (within 24 hours)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transfer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "handlers.AccountTransferRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "date",
+                "to_account_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "to_account_id": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.AllocationSummary": {
             "type": "object",
             "properties": {
@@ -1568,6 +2518,43 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "category": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateAccountRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "type"
+            ],
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "goal_amount": {
+                    "description": "SAVINGS",
+                    "type": "number"
+                },
+                "goal_label": {
+                    "description": "SAVINGS",
+                    "type": "string"
+                },
+                "income_type": {
+                    "description": "required for CARD",
+                    "type": "string"
+                },
+                "initial_balance": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "CARD|CASH|SAVINGS",
                     "type": "string"
                 }
             }
@@ -1595,13 +2582,16 @@ const docTemplate = `{
         "handlers.CreateCategoryRequest": {
             "type": "object",
             "required": [
-                "monthly_budget",
                 "name",
                 "type"
             ],
             "properties": {
                 "allocation_priority": {
                     "type": "integer"
+                },
+                "daily_amount": {
+                    "description": "required for DAILY_CONTINUOUS",
+                    "type": "number"
                 },
                 "metadata": {
                     "type": "object",
@@ -1621,11 +2611,15 @@ const docTemplate = `{
         "handlers.CreateExpenseRequest": {
             "type": "object",
             "required": [
+                "account_id",
                 "amount",
                 "category_id",
                 "date"
             ],
             "properties": {
+                "account_id": {
+                    "type": "string"
+                },
                 "amount": {
                     "type": "number"
                 },
@@ -1643,11 +2637,15 @@ const docTemplate = `{
         "handlers.CreateIncomeRequest": {
             "type": "object",
             "required": [
+                "account_id",
                 "amount",
                 "date",
                 "source"
             ],
             "properties": {
+                "account_id": {
+                    "type": "string"
+                },
                 "amount": {
                     "type": "number"
                 },
@@ -1673,6 +2671,96 @@ const docTemplate = `{
                 },
                 "income": {
                     "$ref": "#/definitions/models.Income"
+                }
+            }
+        },
+        "handlers.CreateNotificationSettingRequest": {
+            "type": "object",
+            "required": [
+                "body",
+                "onesignal_player_id",
+                "time_of_day",
+                "title",
+                "type"
+            ],
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "day_of_month": {
+                    "description": "0 = every day",
+                    "type": "integer"
+                },
+                "onesignal_player_id": {
+                    "type": "string"
+                },
+                "time_of_day": {
+                    "description": "HH:MM",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateScheduledFundRequest": {
+            "type": "object",
+            "required": [
+                "account_id",
+                "amount",
+                "schedule_type"
+            ],
+            "properties": {
+                "account_id": {
+                    "description": "destination account",
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "day_of_month": {
+                    "description": "1-31; 0 = last day",
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "from_account_id": {
+                    "description": "source for TRANSFER",
+                    "type": "string"
+                },
+                "schedule_type": {
+                    "description": "TOP_UP | TRANSFER",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateTransferRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "date",
+                "from_account_id",
+                "to_account_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "from_account_id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "to_account_id": {
+                    "type": "string"
                 }
             }
         },
@@ -1704,6 +2792,106 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.RegisterDeviceRequest": {
+            "type": "object",
+            "required": [
+                "onesignal_player_id"
+            ],
+            "properties": {
+                "onesignal_player_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SpentRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "category_id",
+                "date"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "category_id": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TestNotificationRequest": {
+            "type": "object",
+            "required": [
+                "body",
+                "onesignal_player_id",
+                "title"
+            ],
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "onesignal_player_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TopUpRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "date",
+                "source"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateAccountRequest": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "goal_amount": {
+                    "description": "SAVINGS",
+                    "type": "number"
+                },
+                "goal_label": {
+                    "description": "SAVINGS",
+                    "type": "string"
+                },
+                "income_type": {
+                    "description": "CARD only",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.UpdateAlertRequest": {
             "type": "object",
             "required": [
@@ -1726,6 +2914,9 @@ const docTemplate = `{
                 "allocation_priority": {
                     "type": "integer"
                 },
+                "daily_amount": {
+                    "type": "number"
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
@@ -1737,6 +2928,149 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateNotificationSettingRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "day_of_month": {
+                    "type": "integer"
+                },
+                "is_enabled": {
+                    "type": "boolean"
+                },
+                "onesignal_player_id": {
+                    "type": "string"
+                },
+                "time_of_day": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateScheduledFundRequest": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "day_of_month": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.Account": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number"
+                },
+                "color": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "expenses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Expense"
+                    }
+                },
+                "goal_amount": {
+                    "description": "SAVINGS only",
+                    "type": "number"
+                },
+                "goal_label": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "income_type": {
+                    "description": "Only for CARD: SALARY|PROJECT|FREELANCE|BUSINESS|OTHER",
+                    "type": "string"
+                },
+                "incomes": {
+                    "description": "Relations",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Income"
+                    }
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "transfers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.AccountTransfer"
+                    }
+                },
+                "type": {
+                    "description": "CARD | CASH | SAVINGS",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.AccountTransfer": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "from_account": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Account"
+                        }
+                    ]
+                },
+                "from_account_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "to_account": {
+                    "$ref": "#/definitions/models.Account"
+                },
+                "to_account_id": {
+                    "type": "string"
+                },
+                "transfer_date": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -1798,6 +3132,14 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "days_in_month": {
+                    "description": "Snapshot of days in month",
+                    "type": "integer"
+                },
+                "effective_daily_amount": {
+                    "description": "Snapshot for DAILY_CONTINUOUS",
+                    "type": "number"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -1833,16 +3175,23 @@ const docTemplate = `{
         "models.Expense": {
             "type": "object",
             "properties": {
+                "account": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Account"
+                        }
+                    ]
+                },
+                "account_id": {
+                    "description": "Account used for payment",
+                    "type": "string"
+                },
                 "amount": {
                     "type": "number"
                 },
                 "category": {
-                    "description": "Relations",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.ExpenseCategory"
-                        }
-                    ]
+                    "$ref": "#/definitions/models.ExpenseCategory"
                 },
                 "category_id": {
                     "type": "string"
@@ -1886,6 +3235,10 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "daily_amount": {
+                    "description": "Only for DAILY_CONTINUOUS",
+                    "type": "number"
+                },
                 "expenses": {
                     "type": "array",
                     "items": {
@@ -1919,8 +3272,19 @@ const docTemplate = `{
         "models.Income": {
             "type": "object",
             "properties": {
-                "allocations": {
+                "account": {
                     "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Account"
+                        }
+                    ]
+                },
+                "account_id": {
+                    "description": "Source account",
+                    "type": "string"
+                },
+                "allocations": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.BudgetAllocation"

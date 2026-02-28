@@ -1,228 +1,275 @@
-package services
+﻿package services
 
 import (
-	"errors"
-	"finance-tracking-app/models"
-	"finance-tracking-app/repositories"
+"errors"
+"finance-tracking-app/models"
+"finance-tracking-app/repositories"
 
-	"github.com/google/uuid"
-	"gorm.io/gorm"
+"github.com/google/uuid"
+"gorm.io/gorm"
 )
 
+// ExpenseCreateResult wraps expense with optional budget warning
+type ExpenseCreateResult struct {
+Expense       *models.Expense `json:"expense"`
+BudgetWarning string          `json:"budget_warning,omitempty"`
+}
+
 type ExpenseService interface {
-	CreateExpense(expense *models.Expense) (*models.Expense, error)
-	GetExpenseByID(id uuid.UUID) (*models.Expense, error)
-	GetAllExpenses(limit, offset int) ([]models.Expense, error)
-	GetExpensesByCategory(categoryID uuid.UUID, limit, offset int) ([]models.Expense, error)
-	GetExpensesByMonthYear(month, year int) ([]models.Expense, error)
-	UpdateExpense(id uuid.UUID, expense *models.Expense) (*models.Expense, error)
-	DeleteExpense(id uuid.UUID) error
+CreateExpense(expense *models.Expense) (*ExpenseCreateResult, error)
+GetExpenseByID(id uuid.UUID) (*models.Expense, error)
+GetAllExpenses(limit, offset int) ([]models.Expense, error)
+GetExpensesByCategory(categoryID uuid.UUID, limit, offset int) ([]models.Expense, error)
+GetExpensesByMonthYear(month, year int) ([]models.Expense, error)
+UpdateExpense(id uuid.UUID, expense *models.Expense) (*ExpenseCreateResult, error)
+DeleteExpense(id uuid.UUID) error
 }
 
 type expenseService struct {
-	expenseRepo  repositories.ExpenseRepository
-	categoryRepo repositories.ExpenseCategoryRepository
-	budgetRepo   repositories.CategoryBudgetRepository
-	db           *gorm.DB
+expenseRepo  repositories.ExpenseRepository
+categoryRepo repositories.ExpenseCategoryRepository
+budgetRepo   repositories.CategoryBudgetRepository
+accountRepo  repositories.AccountRepository
+db           *gorm.DB
 }
 
 func NewExpenseService(
-	expenseRepo repositories.ExpenseRepository,
-	categoryRepo repositories.ExpenseCategoryRepository,
-	budgetRepo repositories.CategoryBudgetRepository,
-	db *gorm.DB,
+expenseRepo repositories.ExpenseRepository,
+categoryRepo repositories.ExpenseCategoryRepository,
+budgetRepo repositories.CategoryBudgetRepository,
+accountRepo repositories.AccountRepository,
+db *gorm.DB,
 ) ExpenseService {
-	return &expenseService{
-		expenseRepo:  expenseRepo,
-		categoryRepo: categoryRepo,
-		budgetRepo:   budgetRepo,
-		db:           db,
-	}
+return &expenseService{
+expenseRepo:  expenseRepo,
+categoryRepo: categoryRepo,
+budgetRepo:   budgetRepo,
+accountRepo:  accountRepo,
+db:           db,
+}
 }
 
-// CreateExpense creates a new expense and updates category budget
-func (s *expenseService) CreateExpense(expense *models.Expense) (*models.Expense, error) {
-	// Validate amount
-	if expense.Amount <= 0 {
-		return nil, errors.New("expense amount must be greater than 0")
-	}
+func (s *expenseService) CreateExpense(expense *models.Expense) (*ExpenseCreateResult, error) {
+if expense.Amount <= 0 {
+return nil, errors.New("expense amount must be greater than 0")
+}
 
-	// Check if category exists and is active
-	category, err := s.categoryRepo.FindByID(expense.CategoryID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("category not found")
-		}
-		return nil, err
-	}
+// Validate account (HARD: must exist and have sufficient balance)
+account, err := s.accountRepo.FindByID(expense.AccountID)
+if err != nil {
+return nil, errors.New("account not found")
+}
+if !account.IsActive {
+return nil, errors.New("account is archived")
+}
+if account.Balance < expense.Amount {
+return nil, errors.New("insufficient account balance")
+}
 
-	if !category.IsActive {
-		return nil, errors.New("category is not active")
-	}
+// Validate category
+category, err := s.categoryRepo.FindByID(expense.CategoryID)
+if err != nil {
+if errors.Is(err, gorm.ErrRecordNotFound) {
+return nil, errors.New("category not found")
+}
+return nil, err
+}
+if !category.IsActive {
+return nil, errors.New("category is not active")
+}
 
-	// Get month and year from expense date
-	month := int(expense.Date.Month())
-	year := expense.Date.Year()
+month := int(expense.Date.Month())
+year := expense.Date.Year()
+result := &ExpenseCreateResult{}
 
-	// Start transaction
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Check budget availability
-		budget, err := s.budgetRepo.FindByCategoryAndMonth(expense.CategoryID, month, year)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("no budget allocated for this category in this month")
-			}
-			return err
-		}
+err = s.db.Transaction(func(tx *gorm.DB) error {
+if err := s.expenseRepo.Create(expense); err != nil {
+return err
+}
 
-		// Check if budget is sufficient
-		if budget.RemainingAmount < expense.Amount {
-			return errors.New("insufficient budget for this expense")
-		}
+// HARD: deduct account balance
+if err := s.accountRepo.UpdateBalance(expense.AccountID, -expense.Amount); err != nil {
+return err
+}
 
-		// Create expense
-		if err := s.expenseRepo.Create(expense); err != nil {
-			return err
-		}
+// SOFT: update budget if it exists; warn if insufficient or missing
+budget, err := s.budgetRepo.FindByCategoryAndMonth(expense.CategoryID, month, year)
+if err != nil {
+if errors.Is(err, gorm.ErrRecordNotFound) {
+result.BudgetWarning = "no budget allocated for this category this month"
+return nil
+}
+return err
+}
 
-		// Update budget
-		budget.SpentAmount += expense.Amount
-		budget.RemainingAmount -= expense.Amount
-		if err := s.budgetRepo.Update(budget); err != nil {
-			return err
-		}
+if budget.RemainingAmount < expense.Amount {
+result.BudgetWarning = "expense exceeds remaining budget for this category"
+}
 
-		return nil
-	})
+budget.SpentAmount += expense.Amount
+budget.RemainingAmount -= expense.Amount
+return s.budgetRepo.Update(budget)
+})
 
-	if err != nil {
-		return nil, err
-	}
+if err != nil {
+return nil, err
+}
 
-	// Load category info
-	expense.Category = *category
-
-	return expense, nil
+expense.Category = *category
+result.Expense = expense
+return result, nil
 }
 
 func (s *expenseService) GetExpenseByID(id uuid.UUID) (*models.Expense, error) {
-	return s.expenseRepo.FindByID(id)
+return s.expenseRepo.FindByID(id)
 }
 
 func (s *expenseService) GetAllExpenses(limit, offset int) ([]models.Expense, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	return s.expenseRepo.FindAll(limit, offset)
+if limit <= 0 {
+limit = 20
+}
+return s.expenseRepo.FindAll(limit, offset)
 }
 
 func (s *expenseService) GetExpensesByCategory(categoryID uuid.UUID, limit, offset int) ([]models.Expense, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	return s.expenseRepo.FindByCategory(categoryID, limit, offset)
+if limit <= 0 {
+limit = 20
+}
+return s.expenseRepo.FindByCategory(categoryID, limit, offset)
 }
 
 func (s *expenseService) GetExpensesByMonthYear(month, year int) ([]models.Expense, error) {
-	if month < 1 || month > 12 {
-		return nil, errors.New("invalid month")
-	}
-	if year < 2000 {
-		return nil, errors.New("invalid year")
-	}
-	return s.expenseRepo.FindByMonthYear(month, year)
+if month < 1 || month > 12 {
+return nil, errors.New("invalid month")
+}
+if year < 2000 {
+return nil, errors.New("invalid year")
+}
+return s.expenseRepo.FindByMonthYear(month, year)
 }
 
-func (s *expenseService) UpdateExpense(id uuid.UUID, expense *models.Expense) (*models.Expense, error) {
-	// Validate amount
-	if expense.Amount <= 0 {
-		return nil, errors.New("expense amount must be greater than 0")
-	}
+func (s *expenseService) UpdateExpense(id uuid.UUID, expense *models.Expense) (*ExpenseCreateResult, error) {
+if expense.Amount <= 0 {
+return nil, errors.New("expense amount must be greater than 0")
+}
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Get existing expense
-		existingExpense, err := s.expenseRepo.FindByID(id)
-		if err != nil {
-			return err
-		}
+result := &ExpenseCreateResult{}
 
-		oldCategoryID := existingExpense.CategoryID
-		oldAmount := existingExpense.Amount
-		oldMonth := int(existingExpense.Date.Month())
-		oldYear := existingExpense.Date.Year()
+err := s.db.Transaction(func(tx *gorm.DB) error {
+existing, err := s.expenseRepo.FindByID(id)
+if err != nil {
+return errors.New("expense not found")
+}
 
-		newCategoryID := expense.CategoryID
-		newAmount := expense.Amount
-		newMonth := int(expense.Date.Month())
-		newYear := expense.Date.Year()
+oldAccountID := existing.AccountID
+oldAmount := existing.Amount
+oldCategoryID := existing.CategoryID
+oldMonth := int(existing.Date.Month())
+oldYear := existing.Date.Year()
+newMonth := int(expense.Date.Month())
+newYear := expense.Date.Year()
 
-		// 2. Check if new category exists and is active
-		category, err := s.categoryRepo.FindByID(newCategoryID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("category not found")
-			}
-			return err
-		}
+// Validate new account (HARD)
+newAccount, err := s.accountRepo.FindByID(expense.AccountID)
+if err != nil {
+return errors.New("account not found")
+}
+if !newAccount.IsActive {
+return errors.New("account is archived")
+}
 
-		if !category.IsActive {
-			return errors.New("category is not active")
-		}
+// Validate new category
+category, err := s.categoryRepo.FindByID(expense.CategoryID)
+if err != nil {
+return errors.New("category not found")
+}
+if !category.IsActive {
+return errors.New("category is not active")
+}
 
-		// 3. Rollback old budget
-		oldBudget, err := s.budgetRepo.FindByCategoryAndMonth(oldCategoryID, oldMonth, oldYear)
-		if err == nil {
-			oldBudget.SpentAmount -= oldAmount
-			oldBudget.RemainingAmount += oldAmount
-			if err := s.budgetRepo.Update(oldBudget); err != nil {
-				return err
-			}
-		}
+// Restore old account balance
+if err := s.accountRepo.UpdateBalance(oldAccountID, oldAmount); err != nil {
+return err
+}
 
-		// 4. Check new budget availability
-		newBudget, err := s.budgetRepo.FindByCategoryAndMonth(newCategoryID, newMonth, newYear)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("no budget allocated for this category in this month")
-			}
-			return err
-		}
+// HARD: check new account balance for new amount (after restore)
+refreshedAccount, _ := s.accountRepo.FindByID(expense.AccountID)
+if refreshedAccount != nil && refreshedAccount.Balance < expense.Amount {
+return errors.New("insufficient account balance")
+}
 
-		// Check if budget is sufficient
-		if newBudget.RemainingAmount < newAmount {
-			return errors.New("insufficient budget for this expense")
-		}
+// Deduct new account
+if err := s.accountRepo.UpdateBalance(expense.AccountID, -expense.Amount); err != nil {
+return err
+}
 
-		// 5. Update expense
-		expense.ID = id
-		if err := s.expenseRepo.Update(expense); err != nil {
-			return err
-		}
+// Rollback old budget (SOFT)
+oldBudget, err := s.budgetRepo.FindByCategoryAndMonth(oldCategoryID, oldMonth, oldYear)
+if err == nil {
+oldBudget.SpentAmount -= oldAmount
+oldBudget.RemainingAmount += oldAmount
+_ = s.budgetRepo.Update(oldBudget)
+}
 
-		// 6. Update new budget
-		newBudget.SpentAmount += newAmount
-		newBudget.RemainingAmount -= newAmount
-		if err := s.budgetRepo.Update(newBudget); err != nil {
-			return err
-		}
+// Update expense
+expense.ID = id
+if err := s.expenseRepo.Update(expense); err != nil {
+return err
+}
 
-		return nil
-	})
+// Update new budget (SOFT)
+newBudget, err := s.budgetRepo.FindByCategoryAndMonth(expense.CategoryID, newMonth, newYear)
+if err != nil {
+if errors.Is(err, gorm.ErrRecordNotFound) {
+result.BudgetWarning = "no budget allocated for this category this month"
+return nil
+}
+return err
+}
 
-	if err != nil {
-		return nil, err
-	}
+if newBudget.RemainingAmount < expense.Amount {
+result.BudgetWarning = "expense exceeds remaining budget for this category"
+}
+newBudget.SpentAmount += expense.Amount
+newBudget.RemainingAmount -= expense.Amount
+return s.budgetRepo.Update(newBudget)
+})
 
-	// Load category info
-	category, _ := s.categoryRepo.FindByID(expense.CategoryID)
-	if category != nil {
-		expense.Category = *category
-	}
+if err != nil {
+return nil, err
+}
 
-	return expense, nil
+category, _ := s.categoryRepo.FindByID(expense.CategoryID)
+if category != nil {
+expense.Category = *category
+}
+result.Expense = expense
+return result, nil
 }
 
 func (s *expenseService) DeleteExpense(id uuid.UUID) error {
-	// TODO: Consider implementing logic to rollback budget when deleting expense
-	return s.expenseRepo.Delete(id)
+return s.db.Transaction(func(tx *gorm.DB) error {
+expense, err := s.expenseRepo.FindByID(id)
+if err != nil {
+return errors.New("expense not found")
+}
+
+month := int(expense.Date.Month())
+year := expense.Date.Year()
+
+// Restore account balance
+if err := s.accountRepo.UpdateBalance(expense.AccountID, expense.Amount); err != nil {
+return err
+}
+
+// Restore budget (SOFT)
+budget, err := s.budgetRepo.FindByCategoryAndMonth(expense.CategoryID, month, year)
+if err == nil {
+budget.SpentAmount -= expense.Amount
+budget.RemainingAmount += expense.Amount
+_ = s.budgetRepo.Update(budget)
+}
+
+return s.expenseRepo.Delete(id)
+})
 }

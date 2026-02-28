@@ -1,291 +1,318 @@
-package services
+﻿package services
 
 import (
-	"errors"
-	"finance-tracking-app/models"
-	"finance-tracking-app/repositories"
+"errors"
+"finance-tracking-app/models"
+"finance-tracking-app/repositories"
 
-	"github.com/google/uuid"
-	"gorm.io/gorm"
+"github.com/google/uuid"
+"gorm.io/gorm"
 )
 
+// IncomeCreateResult wraps the result of CreateIncome to include optional warning
+type IncomeCreateResult struct {
+Income                  *models.Income
+Allocations             []models.BudgetAllocation
+AlreadyAllocatedWarning bool
+}
+
 type IncomeService interface {
-	CreateIncome(income *models.Income) (*models.Income, []models.BudgetAllocation, error)
-	GetIncomeByID(id uuid.UUID) (*models.Income, error)
-	GetAllIncomes(limit, offset int) ([]models.Income, error)
-	GetIncomesByMonthYear(month, year int) ([]models.Income, error)
-	UpdateIncome(id uuid.UUID, income *models.Income) (*models.Income, []models.BudgetAllocation, error)
-	DeleteIncome(id uuid.UUID) error
+CreateIncome(income *models.Income) (*IncomeCreateResult, error)
+GetIncomeByID(id uuid.UUID) (*models.Income, error)
+GetAllIncomes(limit, offset int) ([]models.Income, error)
+GetIncomesByMonthYear(month, year int) ([]models.Income, error)
+UpdateIncome(id uuid.UUID, income *models.Income) (*IncomeCreateResult, error)
+DeleteIncome(id uuid.UUID) error
 }
 
 type incomeService struct {
-	incomeRepo     repositories.IncomeRepository
-	categoryRepo   repositories.ExpenseCategoryRepository
-	budgetRepo     repositories.CategoryBudgetRepository
-	allocationRepo repositories.BudgetAllocationRepository
-	db             *gorm.DB
+incomeRepo     repositories.IncomeRepository
+accountRepo    repositories.AccountRepository
+categoryRepo   repositories.ExpenseCategoryRepository
+budgetRepo     repositories.CategoryBudgetRepository
+allocationRepo repositories.BudgetAllocationRepository
+db             *gorm.DB
 }
 
 func NewIncomeService(
-	incomeRepo repositories.IncomeRepository,
-	categoryRepo repositories.ExpenseCategoryRepository,
-	budgetRepo repositories.CategoryBudgetRepository,
-	allocationRepo repositories.BudgetAllocationRepository,
-	db *gorm.DB,
+incomeRepo repositories.IncomeRepository,
+accountRepo repositories.AccountRepository,
+categoryRepo repositories.ExpenseCategoryRepository,
+budgetRepo repositories.CategoryBudgetRepository,
+allocationRepo repositories.BudgetAllocationRepository,
+db *gorm.DB,
 ) IncomeService {
-	return &incomeService{
-		incomeRepo:     incomeRepo,
-		categoryRepo:   categoryRepo,
-		budgetRepo:     budgetRepo,
-		allocationRepo: allocationRepo,
-		db:             db,
-	}
+return &incomeService{
+incomeRepo:     incomeRepo,
+accountRepo:    accountRepo,
+categoryRepo:   categoryRepo,
+budgetRepo:     budgetRepo,
+allocationRepo: allocationRepo,
+db:             db,
+}
 }
 
-// CreateIncome creates a new income and automatically allocates budget to active categories
-func (s *incomeService) CreateIncome(income *models.Income) (*models.Income, []models.BudgetAllocation, error) {
-	var allocations []models.BudgetAllocation
+func (s *incomeService) CreateIncome(income *models.Income) (*IncomeCreateResult, error) {
+if income.Amount <= 0 {
+return nil, errors.New("income amount must be greater than 0")
+}
 
-	// Start transaction
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Save income
-		if err := s.incomeRepo.Create(income); err != nil {
-			return err
-		}
+account, err := s.accountRepo.FindByID(income.AccountID)
+if err != nil {
+return nil, errors.New("account not found")
+}
+if !account.IsActive {
+return nil, errors.New("account is archived and cannot receive funds")
+}
 
-		// 2. Get all active categories
-		categories, err := s.categoryRepo.FindAllActive()
-		if err != nil {
-			return err
-		}
+result := &IncomeCreateResult{}
 
-		if len(categories) == 0 {
-			// No categories to allocate, just return income
-			return nil
-		}
+err = s.db.Transaction(func(tx *gorm.DB) error {
+if err := s.incomeRepo.Create(income); err != nil {
+return err
+}
+if err := s.accountRepo.UpdateBalance(income.AccountID, income.Amount); err != nil {
+return err
+}
 
-		// 3. Calculate total monthly budget from all active categories
-		var totalMonthlyBudget float64
-		for _, cat := range categories {
-			totalMonthlyBudget += cat.MonthlyBudget
-		}
+if account.Type == models.AccountTypeCard &&
+account.IncomeType != nil &&
+*account.IncomeType == models.CardIncomeTypeSalary {
 
-		if totalMonthlyBudget == 0 {
-			return errors.New("total monthly budget is zero, cannot allocate")
-		}
+month := int(income.Date.Month())
+year := income.Date.Year()
+existingAllocs, _ := s.allocationRepo.FindByMonthYear(month, year)
+if len(existingAllocs) > 0 {
+result.AlreadyAllocatedWarning = true
+} else {
+allocs, allocErr := s.runAllocation(income, month, year)
+if allocErr != nil {
+return allocErr
+}
+result.Allocations = allocs
+}
+}
+return nil
+})
 
-		// 4. Get month and year from income date
-		month := int(income.Date.Month())
-		year := income.Date.Year()
-
-		// 5. Allocate budget to each category proportionally
-		for _, category := range categories {
-			// Calculate allocation based on category's budget proportion
-			allocationAmount := (category.MonthlyBudget / totalMonthlyBudget) * income.Amount
-
-			if allocationAmount <= 0 {
-				continue
-			}
-
-			// Find or create category budget for this month/year
-			budget, err := s.budgetRepo.FindByCategoryAndMonth(category.ID, month, year)
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					// Create new budget
-					budget = &models.CategoryBudget{
-						CategoryID:      category.ID,
-						Month:           month,
-						Year:            year,
-						AllocatedAmount: allocationAmount,
-						SpentAmount:     0,
-						RemainingAmount: allocationAmount,
-					}
-					if err := s.budgetRepo.Create(budget); err != nil {
-						return err
-					}
-				} else {
-					return err
-				}
-			} else {
-				// Update existing budget
-				budget.AllocatedAmount += allocationAmount
-				budget.RemainingAmount += allocationAmount
-				if err := s.budgetRepo.Update(budget); err != nil {
-					return err
-				}
-			}
-
-			// Create allocation record
-			allocation := models.BudgetAllocation{
-				IncomeID:        income.ID,
-				CategoryID:      category.ID,
-				AllocatedAmount: allocationAmount,
-				Month:           month,
-				Year:            year,
-			}
-
-			if err := s.allocationRepo.Create(&allocation); err != nil {
-				return err
-			}
-
-			// Load category info for response
-			allocation.Category = category
-			allocations = append(allocations, allocation)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return income, allocations, nil
+if err != nil {
+return nil, err
+}
+result.Income = income
+return result, nil
 }
 
 func (s *incomeService) GetIncomeByID(id uuid.UUID) (*models.Income, error) {
-	return s.incomeRepo.FindByID(id)
+return s.incomeRepo.FindByID(id)
 }
 
 func (s *incomeService) GetAllIncomes(limit, offset int) ([]models.Income, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	return s.incomeRepo.FindAll(limit, offset)
+if limit <= 0 {
+limit = 20
+}
+return s.incomeRepo.FindAll(limit, offset)
 }
 
 func (s *incomeService) GetIncomesByMonthYear(month, year int) ([]models.Income, error) {
-	if month < 1 || month > 12 {
-		return nil, errors.New("invalid month")
-	}
-	if year < 2000 {
-		return nil, errors.New("invalid year")
-	}
-	return s.incomeRepo.FindByMonthYear(month, year)
+if month < 1 || month > 12 {
+return nil, errors.New("invalid month")
+}
+if year < 2000 {
+return nil, errors.New("invalid year")
+}
+return s.incomeRepo.FindByMonthYear(month, year)
 }
 
-func (s *incomeService) UpdateIncome(id uuid.UUID, income *models.Income) (*models.Income, []models.BudgetAllocation, error) {
-	var allocations []models.BudgetAllocation
+func (s *incomeService) UpdateIncome(id uuid.UUID, income *models.Income) (*IncomeCreateResult, error) {
+if income.Amount <= 0 {
+return nil, errors.New("income amount must be greater than 0")
+}
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Get existing income
-		existingIncome, err := s.incomeRepo.FindByID(id)
-		if err != nil {
-			return err
-		}
+result := &IncomeCreateResult{}
 
-		oldMonth := int(existingIncome.Date.Month())
-		oldYear := existingIncome.Date.Year()
+err := s.db.Transaction(func(tx *gorm.DB) error {
+existing, err := s.incomeRepo.FindByID(id)
+if err != nil {
+return errors.New("income not found")
+}
 
-		newMonth := int(income.Date.Month())
-		newYear := income.Date.Year()
-		newAmount := income.Amount
+oldAccountID := existing.AccountID
+oldAmount := existing.Amount
+oldMonth := int(existing.Date.Month())
+oldYear := existing.Date.Year()
+newMonth := int(income.Date.Month())
+newYear := income.Date.Year()
 
-		// 2. Rollback old allocations
-		oldAllocations, err := s.allocationRepo.FindByIncome(id)
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
+newAccount, err := s.accountRepo.FindByID(income.AccountID)
+if err != nil {
+return errors.New("account not found")
+}
+if !newAccount.IsActive {
+return errors.New("account is archived")
+}
 
-		for _, oldAlloc := range oldAllocations {
-			budget, err := s.budgetRepo.FindByCategoryAndMonth(oldAlloc.CategoryID, oldMonth, oldYear)
-			if err == nil {
-				budget.AllocatedAmount -= oldAlloc.AllocatedAmount
-				budget.RemainingAmount -= oldAlloc.AllocatedAmount
-				if err := s.budgetRepo.Update(budget); err != nil {
-					return err
-				}
-			}
-			// Delete old allocation record
-			if err := s.allocationRepo.Delete(oldAlloc.ID); err != nil {
-				return err
-			}
-		}
+if oldAccountID == income.AccountID {
+delta := income.Amount - oldAmount
+if err := s.accountRepo.UpdateBalance(oldAccountID, delta); err != nil {
+return err
+}
+} else {
+if err := s.accountRepo.UpdateBalance(oldAccountID, -oldAmount); err != nil {
+return err
+}
+if err := s.accountRepo.UpdateBalance(income.AccountID, income.Amount); err != nil {
+return err
+}
+}
 
-		// 3. Update income
-		income.ID = id
-		if err := s.incomeRepo.Update(income); err != nil {
-			return err
-		}
+oldAllocations, _ := s.allocationRepo.FindByIncome(id)
+for _, oldAlloc := range oldAllocations {
+budget, err := s.budgetRepo.FindByCategoryAndMonth(oldAlloc.CategoryID, oldMonth, oldYear)
+if err == nil {
+budget.AllocatedAmount -= oldAlloc.AllocatedAmount
+budget.RemainingAmount -= oldAlloc.AllocatedAmount
+_ = s.budgetRepo.Update(budget)
+}
+_ = s.allocationRepo.Delete(oldAlloc.ID)
+}
 
-		// 4. Create new allocations with new amount
-		categories, err := s.categoryRepo.FindAllActive()
-		if err != nil {
-			return err
-		}
+income.ID = id
+if err := s.incomeRepo.Update(income); err != nil {
+return err
+}
 
-		if len(categories) == 0 {
-			return nil
-		}
+if newAccount.Type == models.AccountTypeCard &&
+newAccount.IncomeType != nil &&
+*newAccount.IncomeType == models.CardIncomeTypeSalary {
 
-		var totalMonthlyBudget float64
-		for _, cat := range categories {
-			totalMonthlyBudget += cat.MonthlyBudget
-		}
+existingAllocs, _ := s.allocationRepo.FindByMonthYear(newMonth, newYear)
+if len(existingAllocs) > 0 {
+result.AlreadyAllocatedWarning = true
+} else {
+allocs, allocErr := s.runAllocation(income, newMonth, newYear)
+if allocErr != nil {
+return allocErr
+}
+result.Allocations = allocs
+}
+}
+return nil
+})
 
-		if totalMonthlyBudget == 0 {
-			return errors.New("total monthly budget is zero, cannot allocate")
-		}
-
-		for _, category := range categories {
-			allocationAmount := (category.MonthlyBudget / totalMonthlyBudget) * newAmount
-
-			if allocationAmount <= 0 {
-				continue
-			}
-
-			budget, err := s.budgetRepo.FindByCategoryAndMonth(category.ID, newMonth, newYear)
-			if err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					budget = &models.CategoryBudget{
-						CategoryID:      category.ID,
-						Month:           newMonth,
-						Year:            newYear,
-						AllocatedAmount: allocationAmount,
-						SpentAmount:     0,
-						RemainingAmount: allocationAmount,
-					}
-					if err := s.budgetRepo.Create(budget); err != nil {
-						return err
-					}
-				} else {
-					return err
-				}
-			} else {
-				budget.AllocatedAmount += allocationAmount
-				budget.RemainingAmount += allocationAmount
-				if err := s.budgetRepo.Update(budget); err != nil {
-					return err
-				}
-			}
-
-			allocation := models.BudgetAllocation{
-				IncomeID:        id,
-				CategoryID:      category.ID,
-				AllocatedAmount: allocationAmount,
-				Month:           newMonth,
-				Year:            newYear,
-			}
-
-			if err := s.allocationRepo.Create(&allocation); err != nil {
-				return err
-			}
-
-			allocation.Category = category
-			allocations = append(allocations, allocation)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return income, allocations, nil
+if err != nil {
+return nil, err
+}
+result.Income = income
+return result, nil
 }
 
 func (s *incomeService) DeleteIncome(id uuid.UUID) error {
-	// TODO: Consider implementing logic to rollback allocations when deleting income
-	return s.incomeRepo.Delete(id)
+return s.db.Transaction(func(tx *gorm.DB) error {
+income, err := s.incomeRepo.FindByID(id)
+if err != nil {
+return errors.New("income not found")
+}
+
+month := int(income.Date.Month())
+year := income.Date.Year()
+
+allocations, _ := s.allocationRepo.FindByIncome(id)
+for _, alloc := range allocations {
+budget, err := s.budgetRepo.FindByCategoryAndMonth(alloc.CategoryID, month, year)
+if err == nil {
+budget.AllocatedAmount -= alloc.AllocatedAmount
+budget.RemainingAmount -= alloc.AllocatedAmount
+_ = s.budgetRepo.Update(budget)
+}
+_ = s.allocationRepo.Delete(alloc.ID)
+}
+
+if err := s.accountRepo.UpdateBalance(income.AccountID, -income.Amount); err != nil {
+return err
+}
+
+return s.incomeRepo.Delete(id)
+})
+}
+
+func (s *incomeService) runAllocation(income *models.Income, month, year int) ([]models.BudgetAllocation, error) {
+categories, err := s.categoryRepo.FindAllActive()
+if err != nil {
+return nil, err
+}
+if len(categories) == 0 {
+return nil, nil
+}
+
+effectiveBudgets := make(map[uuid.UUID]float64)
+totalBudget := 0.0
+for _, cat := range categories {
+var eb float64
+if cat.Type == models.CategoryTypeDailyContinuous && cat.DailyAmount != nil {
+eb = *cat.DailyAmount * float64(daysInMonth(month, year))
+} else {
+eb = cat.MonthlyBudget
+}
+effectiveBudgets[cat.ID] = eb
+totalBudget += eb
+}
+
+if totalBudget == 0 {
+return nil, nil
+}
+
+var allocations []models.BudgetAllocation
+for _, cat := range categories {
+eb := effectiveBudgets[cat.ID]
+allocationAmount := (eb / totalBudget) * income.Amount
+if allocationAmount <= 0 {
+continue
+}
+
+days := daysInMonth(month, year)
+budget, err := s.budgetRepo.FindByCategoryAndMonth(cat.ID, month, year)
+if err != nil {
+if errors.Is(err, gorm.ErrRecordNotFound) {
+var effectiveDaily *float64
+var daysPtr *int
+if cat.Type == models.CategoryTypeDailyContinuous && cat.DailyAmount != nil {
+effectiveDaily = cat.DailyAmount
+daysPtr = &days
+}
+budget = &models.CategoryBudget{
+CategoryID:           cat.ID,
+Month:                month,
+Year:                 year,
+AllocatedAmount:      allocationAmount,
+SpentAmount:          0,
+RemainingAmount:      allocationAmount,
+EffectiveDailyAmount: effectiveDaily,
+DaysInMonth:          daysPtr,
+}
+if err := s.budgetRepo.Create(budget); err != nil {
+return nil, err
+}
+} else {
+return nil, err
+}
+} else {
+budget.AllocatedAmount += allocationAmount
+budget.RemainingAmount += allocationAmount
+_ = s.budgetRepo.Update(budget)
+}
+
+alloc := models.BudgetAllocation{
+IncomeID:        income.ID,
+CategoryID:      cat.ID,
+AllocatedAmount: allocationAmount,
+Month:           month,
+Year:            year,
+}
+if err := s.allocationRepo.Create(&alloc); err != nil {
+return nil, err
+}
+alloc.Category = cat
+allocations = append(allocations, alloc)
+}
+return allocations, nil
 }

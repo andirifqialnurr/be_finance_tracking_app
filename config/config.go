@@ -14,6 +14,10 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	ServerPort string
+	// OneSignal push notification
+	OneSignalAppID  string
+	OneSignalAPIKey string
+	OneSignalAPIURL string
 }
 
 var AppConfig *Config
@@ -26,12 +30,15 @@ func LoadConfig() *Config {
 	}
 
 	AppConfig = &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "postgres"),
-		DBPassword: getEnv("DB_PASSWORD", "postgres"),
-		DBName:     getEnv("DB_NAME", "finance_tracking"),
-		ServerPort: getEnv("SERVER_PORT", "8080"),
+		DBHost:          getEnv("DB_HOST", "localhost"),
+		DBPort:          getEnv("DB_PORT", "5432"),
+		DBUser:          getEnv("DB_USER", "postgres"),
+		DBPassword:      getEnv("DB_PASSWORD", "postgres"),
+		DBName:          getEnv("DB_NAME", "finance_tracking"),
+		ServerPort:      getEnv("SERVER_PORT", "8080"),
+		OneSignalAppID:  getEnv("ONESIGNAL_APP_ID", ""),
+		OneSignalAPIKey: getEnv("ONESIGNAL_REST_API_KEY", ""),
+		OneSignalAPIURL: getEnv("ONESIGNAL_API_URL", "https://onesignal.com/api/v1"),
 	}
 
 	return AppConfig

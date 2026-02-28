@@ -20,6 +20,22 @@ import (
 
 // @title Finance Tracking API
 // @version 1.0
+// @description A comprehensive personal finance tracking application API with budget management, expense tracking, analytics, and account management
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url https://github.com/yourusername/finance-tracking-app
+// @contact.email support@financeapp.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8081
+// @BasePath /api/v1
+// @schemes http https
+
+// @title Finance Tracking API
+// @version 1.0
 // @description A comprehensive personal finance tracking application API with budget management, expense tracking, and analytics
 // @termsOfService http://swagger.io/terms/
 
@@ -52,17 +68,26 @@ func main() {
 	allocationRepo := repositories.NewBudgetAllocationRepository(db)
 	reallocationRepo := repositories.NewBudgetReallocationRepository(db)
 	alertRepo := repositories.NewBudgetAlertRepository(db)
+	accountRepo := repositories.NewAccountRepository(db)
+	transferRepo := repositories.NewTransferRepository(db)
+	scheduledFundRepo := repositories.NewScheduledFundRepository(db)
+	notificationRepo := repositories.NewNotificationRepository(db)
 
 	// Initialize services
-	incomeService := services.NewIncomeService(incomeRepo, categoryRepo, budgetRepo, allocationRepo, db)
+	incomeService := services.NewIncomeService(incomeRepo, accountRepo, categoryRepo, budgetRepo, allocationRepo, db)
 	categoryService := services.NewCategoryService(categoryRepo)
-	expenseService := services.NewExpenseService(expenseRepo, categoryRepo, budgetRepo, db)
+	expenseService := services.NewExpenseService(expenseRepo, categoryRepo, budgetRepo, accountRepo, db)
 	budgetService := services.NewBudgetService(budgetRepo, incomeRepo, allocationRepo, reallocationRepo, categoryRepo, db)
 	transactionService := services.NewTransactionService(incomeRepo, expenseRepo)
 	analyticsService := services.NewAnalyticsService(expenseRepo, budgetRepo, categoryRepo)
 	reportService := services.NewReportService(incomeRepo, expenseRepo, budgetRepo, categoryRepo, allocationRepo)
 	alertService := services.NewAlertService(alertRepo, budgetRepo, categoryRepo)
-	schedulerService := services.NewSchedulerService(reportService)
+	statisticsService := services.NewStatisticsService(db)
+	notificationService := services.NewNotificationService(notificationRepo)
+	accountService := services.NewAccountService(accountRepo, incomeRepo, expenseRepo, categoryRepo, budgetRepo, allocationRepo, alertRepo, db)
+	transferService := services.NewTransferService(transferRepo, accountRepo, db)
+	scheduledFundService := services.NewScheduledFundService(scheduledFundRepo, accountRepo, transferRepo, incomeRepo, db)
+	schedulerService := services.NewSchedulerService(reportService, scheduledFundService, notificationService)
 
 	// Initialize handlers
 	incomeHandler := handlers.NewIncomeHandler(incomeService)
@@ -73,6 +98,11 @@ func main() {
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 	reportHandler := handlers.NewReportHandler(reportService)
 	alertHandler := handlers.NewAlertHandler(alertService)
+	accountHandler := handlers.NewAccountHandler(accountService, transferService)
+	transferHandler := handlers.NewTransferHandler(transferService)
+	statisticsHandler := handlers.NewStatisticsHandler(statisticsService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
+	scheduledFundHandler := handlers.NewScheduledFundHandler(scheduledFundService)
 
 	// Setup Gin router
 	router := gin.Default()
@@ -173,6 +203,61 @@ func main() {
 			alerts.PATCH("/:id", alertHandler.UpdateAlert)
 			alerts.DELETE("/:id", alertHandler.DeleteAlert)
 		}
+
+		// Account routes
+		accounts := v1.Group("/accounts")
+		{
+			accounts.POST("", accountHandler.CreateAccount)
+			accounts.GET("", accountHandler.GetAccounts)
+			accounts.GET("/summary", accountHandler.GetAllAccountsSummary) // must be before /:id
+			accounts.GET("/:id", accountHandler.GetAccountByID)
+			accounts.GET("/:id/summary", accountHandler.GetAccountSummary)
+			accounts.GET("/:id/transfers", accountHandler.GetAccountTransfers)
+			accounts.PATCH("/:id", accountHandler.UpdateAccount)
+			accounts.POST("/:id/topup", accountHandler.TopUp)
+			accounts.POST("/:id/spent", accountHandler.Spent)
+			accounts.POST("/:id/transfer", accountHandler.TransferFromAccount)
+			accounts.POST("/:id/archive", accountHandler.ArchiveAccount)
+		}
+
+		// Transfer routes
+		transfers := v1.Group("/transfers")
+		{
+			transfers.POST("", transferHandler.CreateTransfer)
+			transfers.GET("", transferHandler.GetTransfers)
+			transfers.GET("/account", transferHandler.GetTransfersByAccount)
+			transfers.GET("/:id", transferHandler.GetTransferByID)
+			transfers.DELETE("/:id", transferHandler.CancelTransfer)
+		}
+
+		// Statistics routes
+		stats := v1.Group("/statistics")
+		{
+			stats.GET("/monthly", statisticsHandler.GetMonthlyStats)
+			stats.GET("/overview", statisticsHandler.GetOverview)
+		}
+
+		// Notification routes
+		notifications := v1.Group("/notifications")
+		{
+			notifications.POST("/register-device", notificationHandler.RegisterDevice)
+			notifications.POST("/settings", notificationHandler.CreateNotificationSetting)
+			notifications.GET("/settings", notificationHandler.GetNotificationSettings)
+			notifications.GET("/settings/:id", notificationHandler.GetNotificationSettingByID)
+			notifications.PATCH("/settings/:id", notificationHandler.UpdateNotificationSetting)
+			notifications.DELETE("/settings/:id", notificationHandler.DeleteNotificationSetting)
+			notifications.POST("/test", notificationHandler.TestNotification)
+		}
+
+		// Scheduled fund routes
+		scheduledFunds := v1.Group("/scheduled-funds")
+		{
+			scheduledFunds.POST("", scheduledFundHandler.CreateScheduledFund)
+			scheduledFunds.GET("", scheduledFundHandler.GetScheduledFunds)
+			scheduledFunds.GET("/:id", scheduledFundHandler.GetScheduledFundByID)
+			scheduledFunds.PATCH("/:id", scheduledFundHandler.UpdateScheduledFund)
+			scheduledFunds.DELETE("/:id", scheduledFundHandler.DeleteScheduledFund)
+		}
 	}
 
 	// Start scheduler service for automated tasks
@@ -185,7 +270,7 @@ func main() {
 	fmt.Printf("🚀 Server running on http://localhost%s\n", addr)
 	fmt.Printf("📚 Swagger Documentation: http://localhost%s/swagger/index.html\n", addr)
 	fmt.Printf("💚 Health Check: http://localhost%s/health\n", addr)
-	fmt.Printf("⏰ Scheduler: Monthly report auto-generation enabled\n")
+	fmt.Printf("⏰ Scheduler: Monthly reports, scheduled funds, and notifications enabled\n")
 
 	if err := router.Run(addr); err != nil {
 		log.Fatal("Failed to start server:", err)

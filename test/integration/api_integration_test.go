@@ -30,12 +30,13 @@ func setupIntegrationTest(t *testing.T) *gin.Engine {
 	expenseRepo := repositories.NewExpenseRepository(db)
 	allocationRepo := repositories.NewBudgetAllocationRepository(db)
 	reallocationRepo := repositories.NewBudgetReallocationRepository(db)
+	accountRepo := repositories.NewAccountRepository(db)
 	// alertRepo := repositories.NewBudgetAlertRepository(db) // Not used in this test
 
 	// Initialize services
-	incomeService := services.NewIncomeService(incomeRepo, categoryRepo, budgetRepo, allocationRepo, db)
+	incomeService := services.NewIncomeService(incomeRepo, accountRepo, categoryRepo, budgetRepo, allocationRepo, db)
 	categoryService := services.NewCategoryService(categoryRepo)
-	expenseService := services.NewExpenseService(expenseRepo, categoryRepo, budgetRepo, db)
+	expenseService := services.NewExpenseService(expenseRepo, categoryRepo, budgetRepo, accountRepo, db)
 	budgetService := services.NewBudgetService(budgetRepo, incomeRepo, allocationRepo, reallocationRepo, categoryRepo, db)
 
 	// Initialize handlers

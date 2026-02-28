@@ -1,490 +1,491 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
-	"finance-tracking-app/config"
-	"finance-tracking-app/database"
-	"finance-tracking-app/models"
-	"finance-tracking-app/repositories"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/datatypes"
 )
 
-func main() {
-	// Load configuration
-	config.LoadConfig()
+const baseURL = "http://localhost:8081/api/v1"
 
-	// Initialize database
-	database.InitDB()
+// M is a shorthand for JSON object maps
+type M map[string]interface{}
 
-	// Get database instance
-	db := database.GetDB()
-
-	// Initialize repositories
-	categoryRepo := repositories.NewExpenseCategoryRepository(db)
-	incomeRepo := repositories.NewIncomeRepository(db)
-	expenseRepo := repositories.NewExpenseRepository(db)
-	budgetRepo := repositories.NewCategoryBudgetRepository(db)
-	allocationRepo := repositories.NewBudgetAllocationRepository(db)
-	alertRepo := repositories.NewBudgetAlertRepository(db)
-
-	log.Println("🌱 Starting comprehensive database seeder...")
-	log.Println("⚠️  This will populate the database with sample data for testing")
-
-	// Check if data already exists
-	var existingCount int64
-	db.Model(&models.ExpenseCategory{}).Count(&existingCount)
-	if existingCount > 0 {
-		log.Printf("⚠️  Database already has %d categories. Please run cleanup.go first!", existingCount)
-		log.Println("❌ SEEDING ABORTED - Database is not empty")
-		return
-	}
-
-	// Get current month and year
-	now := time.Now()
-	currentMonth := int(now.Month())
-	currentYear := now.Year()
-
-	// ==================== STEP 1: SEED EXPENSE CATEGORIES ====================
-	log.Println("\n📂 Step 1: Creating Expense Categories...")
-
-	// Seed expense categories
-	categories := []models.ExpenseCategory{
-		{
-			ID:                 uuid.New(),
-			Name:               "Makan",
-			Type:               models.CategoryTypeDailyContinuous,
-			MonthlyBudget:      1240000,
-			AllocationPriority: 1,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"daily_amount": 40000, "days": 31}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "Bensin",
-			Type:               models.CategoryTypeUsageBased,
-			MonthlyBudget:      175000,
-			AllocationPriority: 2,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"per_fill": 35000, "fill_count": 5}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "Listrik",
-			Type:               models.CategoryTypeUsageBased,
-			MonthlyBudget:      200000,
-			AllocationPriority: 3,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"type": "utility"}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "GitHub Copilot",
-			Type:               models.CategoryTypeSubscription,
-			MonthlyBudget:      180000,
-			AllocationPriority: 4,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"renewal_date": "monthly"}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "Kuota Internet",
-			Type:               models.CategoryTypeSubscription,
-			MonthlyBudget:      100000,
-			AllocationPriority: 5,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"provider": "telkomsel"}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "Netflix",
-			Type:               models.CategoryTypeSubscription,
-			MonthlyBudget:      120000,
-			AllocationPriority: 6,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"plan": "premium"}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "Spotify",
-			Type:               models.CategoryTypeSubscription,
-			MonthlyBudget:      60000,
-			AllocationPriority: 7,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"plan": "individual"}),
-		},
-		{
-			ID:                 uuid.New(),
-			Name:               "Fore Coffee",
-			Type:               models.CategoryTypeSubscription,
-			MonthlyBudget:      24000,
-			AllocationPriority: 8,
-			IsActive:           true,
-			Metadata:           mustJSON(map[string]interface{}{"membership": "fore+"}),
-		},
-	}
-
-	for _, category := range categories {
-		category.CreatedAt = time.Now()
-		category.UpdatedAt = time.Now()
-
-		if err := categoryRepo.Create(&category); err != nil {
-			log.Printf("❌ Failed to create category %s: %v", category.Name, err)
-		} else {
-			log.Printf("✅ Created category: %s (Budget: Rp %.0f)", category.Name, category.MonthlyBudget)
-		}
-	}
-
-	// ==================== STEP 2: SEED INCOMES ====================
-	log.Println("\n💰 Step 2: Creating Income Entries...")
-
-	incomes := []models.Income{
-		{
-			ID:          uuid.New(),
-			Source:      "Gaji Februari 2026",
-			Amount:      8000000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 1, 9, 0, 0, 0, time.Local),
-			Description: "Gaji bulanan Transfer Bank",
-		},
-		{
-			ID:          uuid.New(),
-			Source:      "Freelance Project - Website",
-			Amount:      3500000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 10, 14, 30, 0, 0, time.Local),
-			Description: "Payment untuk website development client",
-		},
-		{
-			ID:          uuid.New(),
-			Source:      "Bonus Kinerja Q1",
-			Amount:      2000000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 15, 10, 0, 0, 0, time.Local),
-			Description: "Bonus performa kuartal pertama",
-		},
-	}
-
-	var createdIncomes []models.Income
-	for _, income := range incomes {
-		income.CreatedAt = time.Now()
-		income.UpdatedAt = time.Now()
-
-		if err := incomeRepo.Create(&income); err != nil {
-			log.Printf("❌ Failed to create income %s: %v", income.Source, err)
-		} else {
-			log.Printf("✅ Created income: %s (Rp %.0f)", income.Source, income.Amount)
-			createdIncomes = append(createdIncomes, income)
-		}
-	}
-
-	// ==================== STEP 3: CREATE BUDGET ALLOCATIONS ====================
-	log.Println("\n📊 Step 3: Creating Budget Allocations from Incomes...")
-
-	totalMonthlyBudget := 0.0
-	for _, cat := range categories {
-		totalMonthlyBudget += cat.MonthlyBudget
-	}
-
-	for _, income := range createdIncomes {
-		log.Printf("  Allocating income: %s (Rp %.0f)", income.Source, income.Amount)
-
-		for _, category := range categories {
-			// Calculate allocation proportionally
-			allocationRatio := category.MonthlyBudget / totalMonthlyBudget
-			allocatedAmount := income.Amount * allocationRatio
-
-			allocation := models.BudgetAllocation{
-				ID:              uuid.New(),
-				IncomeID:        income.ID,
-				CategoryID:      category.ID,
-				AllocatedAmount: allocatedAmount,
-				Month:           currentMonth,
-				Year:            currentYear,
-				CreatedAt:       time.Now(),
-			}
-
-			if err := allocationRepo.Create(&allocation); err != nil {
-				log.Printf("    ❌ Failed to allocate to %s: %v", category.Name, err)
-			} else {
-				log.Printf("    ✅ Allocated Rp %.0f to %s", allocatedAmount, category.Name)
-			}
-
-			// Update or create category budget
-			budget, err := budgetRepo.FindByCategoryAndMonth(category.ID, currentMonth, currentYear)
-			if err != nil || budget == nil {
-				// Create new budget
-				budget = &models.CategoryBudget{
-					ID:              uuid.New(),
-					CategoryID:      category.ID,
-					Month:           currentMonth,
-					Year:            currentYear,
-					AllocatedAmount: allocatedAmount,
-					SpentAmount:     0,
-					RemainingAmount: allocatedAmount,
-					CreatedAt:       time.Now(),
-					UpdatedAt:       time.Now(),
-				}
-				if err := budgetRepo.Create(budget); err != nil {
-					log.Printf("    ❌ Failed to create budget for %s: %v", category.Name, err)
-				}
-			} else {
-				// Update existing budget
-				budget.AllocatedAmount += allocatedAmount
-				budget.RemainingAmount += allocatedAmount
-				budget.UpdatedAt = time.Now()
-				if err := budgetRepo.Update(budget); err != nil {
-					log.Printf("    ❌ Failed to update budget for %s: %v", category.Name, err)
-				}
-			}
-		}
-	}
-
-	// ==================== STEP 4: SEED EXPENSES ====================
-	log.Println("\n💸 Step 4: Creating Expense Entries...")
-
-	// Helper to find category ID by name
-	findCategoryID := func(name string) uuid.UUID {
-		for _, cat := range categories {
-			if cat.Name == name {
-				return cat.ID
-			}
-		}
-		return uuid.Nil
-	}
-
-	expenses := []models.Expense{
-		// Makan expenses
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Makan"),
-			Amount:      45000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 2, 12, 30, 0, 0, time.Local),
-			Description: "Makan siang Warteg + Minum",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Makan"),
-			Amount:      38000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 3, 13, 0, 0, 0, time.Local),
-			Description: "Nasi Padang + Es Teh",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Makan"),
-			Amount:      52000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 4, 19, 30, 0, 0, time.Local),
-			Description: "Ayam Geprek + Minuman",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Makan"),
-			Amount:      75000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 5, 20, 0, 0, 0, time.Local),
-			Description: "Makan berdua di Restoran",
-		},
-
-		// Bensin expenses
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Bensin"),
-			Amount:      50000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 3, 8, 0, 0, 0, time.Local),
-			Description: "Isi bensin Pertamax Shell",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Bensin"),
-			Amount:      50000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 8, 7, 30, 0, 0, time.Local),
-			Description: "Isi bensin Pertalite",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Bensin"),
-			Amount:      50000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 14, 18, 0, 0, 0, time.Local),
-			Description: "Isi bensin full tank",
-		},
-
-		// Subscriptions
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("GitHub Copilot"),
-			Amount:      180000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 1, 0, 5, 0, 0, time.Local),
-			Description: "GitHub Copilot Monthly Subscription",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Netflix"),
-			Amount:      120000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 5, 0, 10, 0, 0, time.Local),
-			Description: "Netflix Premium Plan",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Spotify"),
-			Amount:      60000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 7, 0, 15, 0, 0, time.Local),
-			Description: "Spotify Individual Plan",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Kuota Internet"),
-			Amount:      100000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 2, 10, 0, 0, 0, time.Local),
-			Description: "Paket Internet 50GB Telkomsel",
-		},
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Fore Coffee"),
-			Amount:      24000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 1, 0, 20, 0, 0, time.Local),
-			Description: "Fore+ Membership Monthly",
-		},
-
-		// Listrik
-		{
-			ID:          uuid.New(),
-			CategoryID:  findCategoryID("Listrik"),
-			Amount:      185000,
-			Date:        time.Date(currentYear, time.Month(currentMonth), 12, 15, 30, 0, 0, time.Local),
-			Description: "Bayar tagihan listrik token PLN",
-		},
-	}
-
-	for _, expense := range expenses {
-		expense.CreatedAt = time.Now()
-		expense.UpdatedAt = time.Now()
-
-		if err := expenseRepo.Create(&expense); err != nil {
-			log.Printf("❌ Failed to create expense: %v", err)
-		} else {
-			// Update budget
-			budget, _ := budgetRepo.FindByCategoryAndMonth(expense.CategoryID, currentMonth, currentYear)
-			if budget != nil {
-				budget.SpentAmount += expense.Amount
-				budget.RemainingAmount -= expense.Amount
-				budget.UpdatedAt = time.Now()
-				budgetRepo.Update(budget)
-			}
-
-			// Get category name for logging
-			catName := ""
-			for _, cat := range categories {
-				if cat.ID == expense.CategoryID {
-					catName = cat.Name
-					break
-				}
-			}
-			log.Printf("✅ Created expense: %s - Rp %.0f (%s)", catName, expense.Amount, expense.Description)
-		}
-	}
-
-	// ==================== STEP 5: CREATE BUDGET ALERTS ====================
-	log.Println("\n🔔 Step 5: Creating Budget Alerts...")
-
-	alerts := []models.BudgetAlert{
-		{
-			ID:                  uuid.New(),
-			CategoryID:          findCategoryID("Makan"),
-			ThresholdPercentage: 80,
-			IsEnabled:           true,
-			CreatedAt:           time.Now(),
-			UpdatedAt:           time.Now(),
-		},
-		{
-			ID:                  uuid.New(),
-			CategoryID:          findCategoryID("Bensin"),
-			ThresholdPercentage: 75,
-			IsEnabled:           true,
-			CreatedAt:           time.Now(),
-			UpdatedAt:           time.Now(),
-		},
-		{
-			ID:                  uuid.New(),
-			CategoryID:          findCategoryID("Listrik"),
-			ThresholdPercentage: 90,
-			IsEnabled:           true,
-			CreatedAt:           time.Now(),
-			UpdatedAt:           time.Now(),
-		},
-	}
-
-	for _, alert := range alerts {
-		if err := alertRepo.Create(&alert); err != nil {
-			log.Printf("❌ Failed to create alert: %v", err)
-		} else {
-			catName := ""
-			for _, cat := range categories {
-				if cat.ID == alert.CategoryID {
-					catName = cat.Name
-					break
-				}
-			}
-			log.Printf("✅ Created alert for %s (threshold: %d%%)", catName, alert.ThresholdPercentage)
-		}
-	}
-
-	// ==================== SUMMARY ====================
-	log.Println("\n" + strings.Repeat("=", 60))
-	log.Println("🎉 SEEDING COMPLETED SUCCESSFULLY!")
-	log.Println(strings.Repeat("=", 60))
-
-	log.Printf("\n📊 Summary for %s %d:", time.Month(currentMonth).String(), currentYear)
-	log.Printf("  ✅ Categories Created: %d", len(categories))
-	log.Printf("  ✅ Incomes Created: %d", len(createdIncomes))
-	log.Printf("  ✅ Expenses Created: %d", len(expenses))
-	log.Printf("  ✅ Budget Alerts Created: %d", len(alerts))
-
-	totalIncome := 0.0
-	for _, income := range createdIncomes {
-		totalIncome += income.Amount
-	}
-
-	totalExpense := 0.0
-	for _, expense := range expenses {
-		totalExpense += expense.Amount
-	}
-
-	log.Println("\n💰 Financial Summary:")
-	log.Printf("  Total Income: Rp %s", formatCurrency(totalIncome))
-	log.Printf("  Total Allocated: Rp %s", formatCurrency(totalMonthlyBudget))
-	log.Printf("  Total Spent: Rp %s", formatCurrency(totalExpense))
-	log.Printf("  Remaining Budget: Rp %s", formatCurrency(totalIncome-totalExpense))
-	log.Printf("  Savings: Rp %s", formatCurrency(totalIncome-totalExpense))
-
-	log.Println("\n📂 Categories Budget Breakdown:")
-	for _, cat := range categories {
-		budget, _ := budgetRepo.FindByCategoryAndMonth(cat.ID, currentMonth, currentYear)
-		if budget != nil {
-			usagePercent := (budget.SpentAmount / budget.AllocatedAmount) * 100
-			log.Printf("  • %s:", cat.Name)
-			log.Printf("      Allocated: Rp %s", formatCurrency(budget.AllocatedAmount))
-			log.Printf("      Spent: Rp %s (%.1f%%)", formatCurrency(budget.SpentAmount), usagePercent)
-			log.Printf("      Remaining: Rp %s", formatCurrency(budget.RemainingAmount))
-		}
-	}
-
-	log.Println("\n✨ Database is now ready for testing!")
-	log.Println("🌐 You can now test all endpoints via Swagger UI")
-	log.Println("📍 http://localhost:8081/swagger/index.html")
-	log.Println("")
+type APIResp struct {
+	Success bool            `json:"success"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
+	Error   string          `json:"error"`
 }
 
-// mustJSON converts a map to datatypes.JSON, panics on error
-func mustJSON(data interface{}) datatypes.JSON {
-	jsonData, err := json.Marshal(data)
+var httpClient = &http.Client{Timeout: 15 * time.Second}
+
+// -- HTTP helpers --------------------------------------------------------------
+
+func apiCall(method, path string, body M) (json.RawMessage, error) {
+	var reqBody io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reqBody = bytes.NewReader(b)
+	}
+
+	req, err := http.NewRequest(method, baseURL+path, reqBody)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return datatypes.JSON(jsonData)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var ar APIResp
+	if err := json.NewDecoder(resp.Body).Decode(&ar); err != nil {
+		return nil, fmt.Errorf("decode failed: %w", err)
+	}
+	if !ar.Success {
+		return nil, fmt.Errorf("API [%s %s]: %s", method, path, ar.Error)
+	}
+	return ar.Data, nil
 }
 
-// formatCurrency formats a number as Indonesian Rupiah
-func formatCurrency(amount float64) string {
-	return fmt.Sprintf("%.0f", amount)
+func post(path string, body M) (json.RawMessage, error) { return apiCall("POST", path, body) }
+
+// idOf extracts "id" field from a raw JSON object
+func idOf(data json.RawMessage) string {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return ""
+	}
+	if id, ok := obj["id"]; ok {
+		return fmt.Sprintf("%v", id)
+	}
+	return ""
+}
+
+// ts formats a UTC timestamp as RFC3339
+func ts(year, month, day, hour, min int) string {
+	return time.Date(year, time.Month(month), day, hour, min, 0, 0, time.UTC).Format(time.RFC3339)
+}
+
+func rp(amount float64) string { return fmt.Sprintf("Rp %.0f", amount) }
+
+func sep(label string) {
+	log.Println("\n" + strings.Repeat("─", 60))
+	log.Printf("  %s", label)
+	log.Println(strings.Repeat("─", 60))
+}
+
+// ─── Entry point ───────────────────────────────────────────────────────────────
+
+func main() {
+	// Health check
+	resp, err := httpClient.Get("http://localhost:8081/health")
+	if err != nil || resp.StatusCode != 200 {
+		log.Fatal("❌  Server tidak berjalan di localhost:8081. Jalankan server terlebih dahulu!")
+	}
+	resp.Body.Close()
+	log.Println("✅  Server sehat. Memulai seeding...")
+
+	// ─── STEP 1: Categories ────────────────────────────────────────────────────
+	sep("STEP 1 — Expense Categories")
+
+	dailyMakan := 40_000.0
+	catDefs := []M{
+		{"name": "Makan", "type": "DAILY_CONTINUOUS", "daily_amount": dailyMakan, "allocation_priority": 1, "metadata": M{"icon": "food", "note": "Rp40.000/hari"}},
+		{"name": "Bensin", "type": "USAGE_BASED", "monthly_budget": 175_000.0, "allocation_priority": 2, "metadata": M{"icon": "fuel"}},
+		{"name": "Listrik", "type": "USAGE_BASED", "monthly_budget": 200_000.0, "allocation_priority": 3, "metadata": M{"icon": "electric", "type": "PLN token"}},
+		{"name": "GitHub Copilot", "type": "SUBSCRIPTION", "monthly_budget": 180_000.0, "allocation_priority": 4, "metadata": M{"renewal": "monthly", "vendor": "GitHub"}},
+		{"name": "Kuota Internet", "type": "SUBSCRIPTION", "monthly_budget": 100_000.0, "allocation_priority": 5, "metadata": M{"provider": "Telkomsel", "quota": "50GB"}},
+		{"name": "Netflix", "type": "SUBSCRIPTION", "monthly_budget": 120_000.0, "allocation_priority": 6, "metadata": M{"plan": "Premium"}},
+		{"name": "Spotify", "type": "SUBSCRIPTION", "monthly_budget": 60_000.0, "allocation_priority": 7, "metadata": M{"plan": "Individual"}},
+		{"name": "Fore Coffee", "type": "SUBSCRIPTION", "monthly_budget": 24_000.0, "allocation_priority": 8, "metadata": M{"membership": "Fore+"}},
+	}
+
+	catIDs := make(map[string]string) // name → uuid
+	for _, def := range catDefs {
+		data, err := post("/categories", def)
+		if err != nil {
+			log.Fatalf("  ❌ Category [%v]: %v", def["name"], err)
+		}
+		catIDs[def["name"].(string)] = idOf(data)
+		log.Printf("  ✅ %-20s → %s", def["name"], catIDs[def["name"].(string)])
+	}
+
+	// ─── STEP 2: Budget Alerts (one per category) ───────────────────────────────
+	sep("STEP 2 — Budget Alerts")
+
+	alertThresholds := map[string]int{
+		"Makan": 75, "Bensin": 75,
+		"GitHub Copilot": 90, "Netflix": 90, "Spotify": 90, "Fore Coffee": 90,
+	}
+	for name, catID := range catIDs {
+		threshold := 80
+		if t, ok := alertThresholds[name]; ok {
+			threshold = t
+		}
+		data, err := post("/alerts", M{
+			"category_id": catID, "threshold_percentage": threshold, "is_enabled": true,
+		})
+		if err != nil {
+			log.Printf("  ⚠️  Alert [%s]: %v", name, err)
+		} else {
+			log.Printf("  ✅ Alert %-20s threshold=%d%% → %s", name, threshold, idOf(data))
+		}
+	}
+
+	// ─── STEP 3: Accounts ─────────────────────────────────────────────────────
+	sep("STEP 3 — Accounts")
+
+	salaryType := "SALARY"
+	goalAmt := 25_000_000.0
+	goalLabel := "Dana darurat 3 bulan gaji"
+
+	bcaData, err := post("/accounts", M{
+		"name": "BCA - Gajian", "type": "CARD", "income_type": salaryType,
+		"color": "#1565C0", "description": "Rekening utama penerimaan gaji & auto-alokasi budget",
+		"initial_balance": 0,
+	})
+	if err != nil {
+		log.Fatalf("  ❌ Account BCA: %v", err)
+	}
+	bcaID := idOf(bcaData)
+	log.Printf("  ✅ %-25s → %s", "BCA - Gajian", bcaID)
+
+	cashData, err := post("/accounts", M{
+		"name": "Dompet Cash", "type": "CASH",
+		"color": "#2E7D32", "description": "Uang tunai untuk kebutuhan harian (makan & bensin)",
+		"initial_balance": 0,
+	})
+	if err != nil {
+		log.Fatalf("  ❌ Account Cash: %v", err)
+	}
+	cashID := idOf(cashData)
+	log.Printf("  ✅ %-25s → %s", "Dompet Cash", cashID)
+
+	savingsData, err := post("/accounts", M{
+		"name": "Tabungan Darurat", "type": "SAVINGS",
+		"color": "#E65100", "description": "Dana darurat untuk keperluan mendesak",
+		"goal_amount": goalAmt, "goal_label": goalLabel, "initial_balance": 0,
+	})
+	if err != nil {
+		log.Fatalf("  ❌ Account Savings: %v", err)
+	}
+	savingsID := idOf(savingsData)
+	log.Printf("  ✅ %-25s → %s", "Tabungan Darurat", savingsID)
+
+	// ─── Helpers ────────────────────────────────────────────────────────────────
+	// doTopUp  → POST /accounts/:id/topup  (updates balance, triggers auto-alloc for SALARY)
+	// doSpent  → POST /accounts/:id/spent  (deducts balance + updates category budget)
+	// doTransfer → POST /transfers         (moves balance between accounts)
+
+	type topUpEntry struct {
+		source, desc string
+		amount       float64
+		day, hour    int
+	}
+	type spentEntry struct {
+		cat, desc string
+		accountID string
+		amount    float64
+		day, hr   int
+	}
+	type transferEntry struct {
+		from, to string
+		amount   float64
+		day      int
+		note     string
+	}
+
+	doTopUp := func(y, mo int, accountID string, e topUpEntry) {
+		_, err := post(fmt.Sprintf("/accounts/%s/topup", accountID), M{
+			"source": e.source, "amount": e.amount,
+			"date": ts(y, mo, e.day, e.hour, 0), "description": e.desc,
+		})
+		if err != nil {
+			log.Printf("    ❌ TopUp [%s]: %v", e.source, err)
+		} else {
+			log.Printf("    ✅ TopUp  %-35s %s", e.source, rp(e.amount))
+		}
+	}
+
+	doSpent := func(y, mo int, e spentEntry) {
+		catID, ok := catIDs[e.cat]
+		if !ok {
+			log.Printf("    ⚠️  Kategori tidak ditemukan: %s", e.cat)
+			return
+		}
+		_, err := post(fmt.Sprintf("/accounts/%s/spent", e.accountID), M{
+			"category_id": catID, "amount": e.amount,
+			"date": ts(y, mo, e.day, e.hr, 0), "description": e.desc,
+		})
+		if err != nil {
+			log.Printf("    ❌ Spent [%s] %s: %v", e.cat, e.desc, err)
+		} else {
+			log.Printf("    ✅ Spent  [%-15s] %-35s %s", e.cat, e.desc, rp(e.amount))
+		}
+	}
+
+	doTransfer := func(y, mo int, e transferEntry) {
+		_, err := post("/transfers", M{
+			"from_account_id": e.from, "to_account_id": e.to,
+			"amount": e.amount, "note": e.note,
+			"date": ts(y, mo, e.day, 10, 0),
+		})
+		if err != nil {
+			log.Printf("    ❌ Transfer [%s]: %v", e.note, err)
+		} else {
+			log.Printf("    ✅ Transfer %-35s %s", e.note, rp(e.amount))
+		}
+	}
+
+	// Langganan bulanan tetap (always from BCA)
+	subscriptions := func(y, mo int) {
+		for _, e := range []spentEntry{
+			{"GitHub Copilot", "GitHub Copilot Monthly Subscription", bcaID, 180_000, 1, 0},
+			{"Fore Coffee", "Fore+ Membership Monthly", bcaID, 24_000, 1, 0},
+			{"Kuota Internet", "Paket Internet 50GB Telkomsel", bcaID, 100_000, 2, 10},
+			{"Netflix", "Netflix Premium Plan", bcaID, 120_000, 5, 0},
+			{"Spotify", "Spotify Individual Plan", bcaID, 60_000, 7, 0},
+		} {
+			doSpent(y, mo, e)
+		}
+	}
+
+	// ─── STEP 4: Oktober 2025 ─────────────────────────────────────────────────
+	sep("STEP 4 — Oktober 2025  |  BCA only")
+	{
+		y, mo := 2025, 10
+		doTopUp(y, mo, bcaID, topUpEntry{"Gaji Oktober 2025", "Gaji bulanan transfer bank", 8_000_000, 1, 9})
+		subscriptions(y, mo)
+		for _, e := range []spentEntry{
+			{"Makan", "Nasi Warteg + Minum", bcaID, 42_000, 2, 12},
+			{"Makan", "Ayam Geprek + Es Teh", bcaID, 55_000, 5, 19},
+			{"Makan", "Nasi Padang siang", bcaID, 38_000, 9, 13},
+			{"Makan", "Makan malam berdua", bcaID, 70_000, 13, 19},
+			{"Makan", "Soto ayam + Nasi", bcaID, 45_000, 18, 12},
+			{"Makan", "Mie Ayam + Es Jeruk", bcaID, 35_000, 22, 13},
+			{"Makan", "Nasi Goreng Spesial", bcaID, 40_000, 26, 20},
+			{"Bensin", "Isi bensin Pertalite", bcaID, 50_000, 4, 8},
+			{"Bensin", "Isi bensin Pertamax", bcaID, 50_000, 12, 17},
+			{"Bensin", "Isi bensin full tank", bcaID, 50_000, 24, 7},
+			{"Listrik", "Tagihan listrik PLN Oktober", bcaID, 178_000, 14, 15},
+		} {
+			doSpent(y, mo, e)
+		}
+	}
+
+	// ─── STEP 5: November 2025 ────────────────────────────────────────────────
+	sep("STEP 5 — November 2025  |  BCA + freelance")
+	{
+		y, mo := 2025, 11
+		doTopUp(y, mo, bcaID, topUpEntry{"Gaji November 2025", "Gaji bulanan transfer bank", 8_000_000, 1, 9})
+		doTopUp(y, mo, bcaID, topUpEntry{"Freelance Design", "Pembayaran proyek desain UI mobile app", 1_500_000, 15, 14})
+		subscriptions(y, mo)
+		for _, e := range []spentEntry{
+			{"Makan", "Makan siang Warteg", bcaID, 50_000, 3, 12},
+			{"Makan", "Nasi Padang + Lauk", bcaID, 40_000, 7, 13},
+			{"Makan", "Makan malam Geprek", bcaID, 65_000, 11, 20},
+			{"Makan", "Soto + Nasi + Minum", bcaID, 48_000, 16, 12},
+			{"Makan", "Bakso Komplit", bcaID, 35_000, 20, 13},
+			{"Makan", "Makan malam perayaan proyek", bcaID, 120_000, 28, 19},
+			{"Bensin", "Isi bensin Pertalite pagi", bcaID, 50_000, 5, 7},
+			{"Bensin", "Isi bensin Pertamax sore", bcaID, 50_000, 15, 18},
+			{"Bensin", "Isi bensin full tank", bcaID, 50_000, 25, 8},
+			{"Listrik", "Tagihan listrik PLN November", bcaID, 192_000, 12, 15},
+		} {
+			doSpent(y, mo, e)
+		}
+	}
+
+	// ─── STEP 6: Desember 2025 ────────────────────────────────────────────────
+	sep("STEP 6 — Desember 2025  |  Transfer aktif")
+	{
+		y, mo := 2025, 12
+		doTopUp(y, mo, bcaID, topUpEntry{"Gaji Desember 2025", "Gaji bulanan transfer bank", 8_000_000, 1, 9})
+		doTopUp(y, mo, bcaID, topUpEntry{"Bonus Akhir Tahun 2025", "Bonus kinerja tahunan dari perusahaan", 3_000_000, 20, 10})
+		doTransfer(y, mo, transferEntry{bcaID, cashID, 2_000_000, 1, "Uang cash bulanan Desember"})
+		doTransfer(y, mo, transferEntry{bcaID, savingsID, 2_000_000, 2, "Tabungan darurat Desember"})
+		subscriptions(y, mo)
+		for _, e := range []spentEntry{
+			{"Makan", "Makan siang Warung Padang", cashID, 55_000, 2, 12},
+			{"Makan", "Makan malam restoran keluarga", cashID, 85_000, 8, 19},
+			{"Makan", "Nasi Warteg + Lauk", cashID, 45_000, 14, 12},
+			{"Makan", "Dinner perayaan bonus", cashID, 75_000, 20, 20},
+			{"Makan", "Makan siang Natal", cashID, 60_000, 25, 13},
+			{"Makan", "Makan malam tahun baru", cashID, 150_000, 31, 20},
+			{"Bensin", "Isi bensin Pertalite", cashID, 50_000, 3, 8},
+			{"Bensin", "Isi bensin Pertamax Turbo", cashID, 50_000, 12, 7},
+			{"Bensin", "Isi bensin untuk mudik", cashID, 100_000, 22, 17},
+			{"Listrik", "Tagihan listrik PLN Desember", bcaID, 205_000, 12, 15},
+		} {
+			doSpent(y, mo, e)
+		}
+	}
+
+	// ─── STEP 7: Januari 2026 ─────────────────────────────────────────────────
+	sep("STEP 7 — Januari 2026  |  Awal tahun baru")
+	{
+		y, mo := 2026, 1
+		doTopUp(y, mo, bcaID, topUpEntry{"Gaji Januari 2026", "Gaji bulanan transfer bank", 8_000_000, 1, 9})
+		doTransfer(y, mo, transferEntry{bcaID, cashID, 2_000_000, 1, "Uang cash bulanan Januari"})
+		doTransfer(y, mo, transferEntry{bcaID, savingsID, 1_500_000, 2, "Tabungan darurat Januari"})
+		subscriptions(y, mo)
+		for _, e := range []spentEntry{
+			{"Makan", "Makan siang Warteg", cashID, 40_000, 3, 12},
+			{"Makan", "Ayam Geprek + Minum", cashID, 52_000, 7, 13},
+			{"Makan", "Nasi Padang siang", cashID, 38_000, 12, 12},
+			{"Makan", "Makan malam berdua", cashID, 68_000, 17, 19},
+			{"Makan", "Gado-gado + Es Teh", cashID, 30_000, 20, 13},
+			{"Makan", "Mie Goreng Spesial", cashID, 45_000, 25, 19},
+			{"Bensin", "Isi bensin Pertalite pagi", cashID, 50_000, 4, 7},
+			{"Bensin", "Isi bensin Pertamax sore", cashID, 50_000, 16, 18},
+			{"Bensin", "Isi bensin full tank", cashID, 50_000, 28, 8},
+			{"Listrik", "Tagihan listrik PLN Januari", bcaID, 182_000, 12, 15},
+		} {
+			doSpent(y, mo, e)
+		}
+	}
+
+	// ─── STEP 8: Februari 2026 (current) ─────────────────────────────────────
+	sep("STEP 8 — Februari 2026  |  Bulan ini")
+	{
+		y, mo := 2026, 2
+		doTopUp(y, mo, bcaID, topUpEntry{"Gaji Februari 2026", "Gaji bulanan transfer bank", 8_000_000, 1, 9})
+		doTopUp(y, mo, bcaID, topUpEntry{"Freelance Website", "Pembayaran proyek website development client", 3_500_000, 10, 14})
+		doTransfer(y, mo, transferEntry{bcaID, cashID, 2_000_000, 1, "Uang cash bulanan Februari"})
+		doTransfer(y, mo, transferEntry{bcaID, savingsID, 2_000_000, 2, "Tabungan darurat Februari"})
+		subscriptions(y, mo)
+		for _, e := range []spentEntry{
+			{"Makan", "Makan siang Warteg", cashID, 45_000, 2, 12},
+			{"Makan", "Nasi Padang + Es Teh", cashID, 38_000, 5, 13},
+			{"Makan", "Ayam Geprek + Minuman", cashID, 52_000, 8, 19},
+			{"Makan", "Valentine dinner", cashID, 200_000, 14, 19},
+			{"Makan", "Soto ayam + Nasi", cashID, 48_000, 15, 12},
+			{"Makan", "Makan siang kantin", cashID, 35_000, 18, 12},
+			{"Makan", "Makan berdua di Restoran", cashID, 75_000, 22, 20},
+			{"Bensin", "Isi bensin Pertamax Shell", cashID, 50_000, 3, 8},
+			{"Bensin", "Isi bensin Pertalite", cashID, 50_000, 10, 7},
+			{"Bensin", "Isi bensin full tank", cashID, 50_000, 20, 18},
+			{"Listrik", "Tagihan listrik token PLN Februari", bcaID, 185_000, 12, 15},
+		} {
+			doSpent(y, mo, e)
+		}
+
+		// Budget Reallocation: sisa Listrik Feb dialokasikan ke Makan
+		reallocData, err := post("/budgets/reallocate", M{
+			"from_category_id": catIDs["Listrik"],
+			"to_category_id":   catIDs["Makan"],
+			"amount":           15_000.0,
+			"reason":           "Token PLN lebih hemat bulan ini, realokasi sisa ke makan",
+			"month":            2, "year": 2026,
+		})
+		if err != nil {
+			log.Printf("  ⚠️  Realokasi: %v", err)
+		} else {
+			log.Printf("  ✅ Realokasi Listrik→Makan Rp15.000 → %s", idOf(reallocData))
+		}
+	}
+
+	// ─── STEP 9: Register Device ──────────────────────────────────────────────
+	sep("STEP 9 — Notification: Register Device")
+	_, err = post("/notifications/register-device", M{"onesignal_player_id": "demo-player-id-001"})
+	if err != nil {
+		log.Printf("  ⚠️  Register device: %v", err)
+	} else {
+		log.Println("  ✅ Device demo-player-id-001 registered")
+	}
+
+	// ─── STEP 10: Notification Settings ─────────────────────────────────────
+	sep("STEP 10 — Notification Settings")
+	// Valid types: ALLOCATION_REMINDER | BUDGET_ALERT | SAVINGS_GOAL | SCHEDULED_FUND
+	notifDefs := []M{
+		{
+			"type": "ALLOCATION_REMINDER", "title": "Waktunya Set Alokasi Gaji",
+			"body":         "Gaji sudah masuk! Lakukan topup ke akun BCA dan auto-alokasi budget bulan ini.",
+			"day_of_month": 1, "time_of_day": "09:30", "is_enabled": true,
+			"onesignal_player_id": "demo-player-id-001",
+		},
+		{
+			"type": "BUDGET_ALERT", "title": "Cek Budget Pengeluaran",
+			"body":         "Pantau sisa budget kategori pengeluaranmu di pertengahan bulan ini.",
+			"day_of_month": 15, "time_of_day": "20:00", "is_enabled": true,
+			"onesignal_player_id": "demo-player-id-001",
+		},
+		{
+			"type": "SAVINGS_GOAL", "title": "Progress Tabungan Darurat",
+			"body":         "Yuk cek seberapa dekat kamu ke target Rp25.000.000 tabungan darurat!",
+			"day_of_month": 25, "time_of_day": "19:00", "is_enabled": true,
+			"onesignal_player_id": "demo-player-id-001",
+		},
+		{
+			"type": "SCHEDULED_FUND", "title": "Scheduled Fund Akan Berjalan",
+			"body":         "Transfer otomatis bulanan ke Dompet Cash & Tabungan akan dieksekusi besok.",
+			"day_of_month": 0, "time_of_day": "20:00", "is_enabled": true,
+			"onesignal_player_id": "demo-player-id-001",
+		},
+	}
+	for _, def := range notifDefs {
+		data, err := post("/notifications/settings", def)
+		if err != nil {
+			log.Printf("  ❌ Notification [%v]: %v", def["title"], err)
+		} else {
+			log.Printf("  ✅ %-45s → %s", def["title"], idOf(data))
+		}
+	}
+
+	// ─── STEP 11: Scheduled Funds ─────────────────────────────────────────────
+	sep("STEP 11 — Scheduled Funds")
+	sfDefs := []M{
+		{
+			"account_id": cashID, "from_account_id": bcaID,
+			"schedule_type": "TRANSFER", "amount": 2_000_000.0, "day_of_month": 1,
+			"description": "Auto transfer uang cash bulanan dari BCA ke Dompet",
+		},
+		{
+			"account_id": savingsID, "from_account_id": bcaID,
+			"schedule_type": "TRANSFER", "amount": 1_500_000.0, "day_of_month": 2,
+			"description": "Auto tabungan darurat bulanan — target Rp25jt",
+		},
+	}
+	for _, def := range sfDefs {
+		data, err := post("/scheduled-funds", def)
+		if err != nil {
+			log.Printf("  ❌ Scheduled fund: %v", err)
+		} else {
+			log.Printf("  ✅ %-55s → %s", def["description"], idOf(data))
+		}
+	}
+
+	// ─── Summary ──────────────────────────────────────────────────────────────
+	log.Println()
+	log.Println(strings.Repeat("═", 60))
+	log.Println("  SEEDING SELESAI!")
+	log.Println(strings.Repeat("═", 60))
+	log.Printf("  Periode          : Oktober 2025 – Februari 2026 (5 bulan)")
+	log.Printf("  Kategori         : %d", len(catDefs))
+	log.Printf("  Budget Alerts    : %d (satu per kategori)", len(catIDs))
+	log.Printf("  Akun             : BCA - Gajian | Dompet Cash | Tabungan Darurat")
+	log.Printf("  Total Pemasukan  : Rp 52.000.000 (gaji + freelance + bonus)")
+	log.Printf("  Transfer         : BCA→Cash Rp8jt | BCA→Tabungan Rp7.5jt (Des–Feb)")
+	log.Printf("  Budget Realokasi : 1 (Listrik→Makan Feb 2026 Rp15.000)")
+	log.Printf("  Notifikasi       : %d settings", len(notifDefs))
+	log.Printf("  Scheduled Funds  : %d", len(sfDefs))
+	log.Println()
+	log.Printf("  Estimasi saldo akhir Februari 2026:")
+	log.Printf("     BCA - Gajian       : ≈ Rp 32.155.000")
+	log.Printf("     Dompet Cash        : ≈ Rp  4.224.000")
+	log.Printf("     Tabungan Darurat   : ≈ Rp  5.500.000")
+	log.Println()
+	log.Println("  Swagger: http://localhost:8081/swagger/index.html")
 }

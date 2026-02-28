@@ -1,11 +1,52 @@
 basePath: /api/v1
 definitions:
+  handlers.AccountTransferRequest:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      note:
+        type: string
+      to_account_id:
+        type: string
+    required:
+    - amount
+    - date
+    - to_account_id
+    type: object
   handlers.AllocationSummary:
     properties:
       allocated:
         type: number
       category:
         type: string
+    type: object
+  handlers.CreateAccountRequest:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      goal_amount:
+        description: SAVINGS
+        type: number
+      goal_label:
+        description: SAVINGS
+        type: string
+      income_type:
+        description: required for CARD
+        type: string
+      initial_balance:
+        type: number
+      name:
+        type: string
+      type:
+        description: CARD|CASH|SAVINGS
+        type: string
+    required:
+    - name
+    - type
     type: object
   handlers.CreateAlertRequest:
     properties:
@@ -25,6 +66,9 @@ definitions:
     properties:
       allocation_priority:
         type: integer
+      daily_amount:
+        description: required for DAILY_CONTINUOUS
+        type: number
       metadata:
         additionalProperties: true
         type: object
@@ -35,12 +79,13 @@ definitions:
       type:
         type: string
     required:
-    - monthly_budget
     - name
     - type
     type: object
   handlers.CreateExpenseRequest:
     properties:
+      account_id:
+        type: string
       amount:
         type: number
       category_id:
@@ -50,12 +95,15 @@ definitions:
       description:
         type: string
     required:
+    - account_id
     - amount
     - category_id
     - date
     type: object
   handlers.CreateIncomeRequest:
     properties:
+      account_id:
+        type: string
       amount:
         type: number
       date:
@@ -65,6 +113,7 @@ definitions:
       source:
         type: string
     required:
+    - account_id
     - amount
     - date
     - source
@@ -77,6 +126,70 @@ definitions:
         type: array
       income:
         $ref: '#/definitions/models.Income'
+    type: object
+  handlers.CreateNotificationSettingRequest:
+    properties:
+      body:
+        type: string
+      day_of_month:
+        description: 0 = every day
+        type: integer
+      onesignal_player_id:
+        type: string
+      time_of_day:
+        description: HH:MM
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    required:
+    - body
+    - onesignal_player_id
+    - time_of_day
+    - title
+    - type
+    type: object
+  handlers.CreateScheduledFundRequest:
+    properties:
+      account_id:
+        description: destination account
+        type: string
+      amount:
+        type: number
+      day_of_month:
+        description: 1-31; 0 = last day
+        type: integer
+      description:
+        type: string
+      from_account_id:
+        description: source for TRANSFER
+        type: string
+      schedule_type:
+        description: TOP_UP | TRANSFER
+        type: string
+    required:
+    - account_id
+    - amount
+    - schedule_type
+    type: object
+  handlers.CreateTransferRequest:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      from_account_id:
+        type: string
+      note:
+        type: string
+      to_account_id:
+        type: string
+    required:
+    - amount
+    - date
+    - from_account_id
+    - to_account_id
     type: object
   handlers.ReallocateBudgetRequest:
     properties:
@@ -97,6 +210,74 @@ definitions:
     - from_category_id
     - to_category_id
     type: object
+  handlers.RegisterDeviceRequest:
+    properties:
+      onesignal_player_id:
+        type: string
+    required:
+    - onesignal_player_id
+    type: object
+  handlers.SpentRequest:
+    properties:
+      amount:
+        type: number
+      category_id:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+    required:
+    - amount
+    - category_id
+    - date
+    type: object
+  handlers.TestNotificationRequest:
+    properties:
+      body:
+        type: string
+      onesignal_player_id:
+        type: string
+      title:
+        type: string
+    required:
+    - body
+    - onesignal_player_id
+    - title
+    type: object
+  handlers.TopUpRequest:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      description:
+        type: string
+      source:
+        type: string
+    required:
+    - amount
+    - date
+    - source
+    type: object
+  handlers.UpdateAccountRequest:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      goal_amount:
+        description: SAVINGS
+        type: number
+      goal_label:
+        description: SAVINGS
+        type: string
+      income_type:
+        description: CARD only
+        type: string
+      name:
+        type: string
+    type: object
   handlers.UpdateAlertRequest:
     properties:
       is_enabled:
@@ -112,6 +293,8 @@ definitions:
     properties:
       allocation_priority:
         type: integer
+      daily_amount:
+        type: number
       metadata:
         additionalProperties: true
         type: object
@@ -120,6 +303,100 @@ definitions:
       name:
         type: string
       type:
+        type: string
+    type: object
+  handlers.UpdateNotificationSettingRequest:
+    properties:
+      body:
+        type: string
+      day_of_month:
+        type: integer
+      is_enabled:
+        type: boolean
+      onesignal_player_id:
+        type: string
+      time_of_day:
+        type: string
+      title:
+        type: string
+    type: object
+  handlers.UpdateScheduledFundRequest:
+    properties:
+      amount:
+        type: number
+      day_of_month:
+        type: integer
+      description:
+        type: string
+      is_active:
+        type: boolean
+    type: object
+  models.Account:
+    properties:
+      balance:
+        type: number
+      color:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      expenses:
+        items:
+          $ref: '#/definitions/models.Expense'
+        type: array
+      goal_amount:
+        description: SAVINGS only
+        type: number
+      goal_label:
+        type: string
+      id:
+        type: string
+      income_type:
+        description: 'Only for CARD: SALARY|PROJECT|FREELANCE|BUSINESS|OTHER'
+        type: string
+      incomes:
+        description: Relations
+        items:
+          $ref: '#/definitions/models.Income'
+        type: array
+      is_active:
+        type: boolean
+      name:
+        type: string
+      transfers:
+        items:
+          $ref: '#/definitions/models.AccountTransfer'
+        type: array
+      type:
+        description: CARD | CASH | SAVINGS
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.AccountTransfer:
+    properties:
+      amount:
+        type: number
+      created_at:
+        type: string
+      from_account:
+        allOf:
+        - $ref: '#/definitions/models.Account'
+        description: Relations
+      from_account_id:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      to_account:
+        $ref: '#/definitions/models.Account'
+      to_account_id:
+        type: string
+      transfer_date:
+        type: string
+      updated_at:
         type: string
     type: object
   models.BudgetAllocation:
@@ -157,6 +434,12 @@ definitions:
         type: string
       created_at:
         type: string
+      days_in_month:
+        description: Snapshot of days in month
+        type: integer
+      effective_daily_amount:
+        description: Snapshot for DAILY_CONTINUOUS
+        type: number
       id:
         type: string
       month:
@@ -180,12 +463,17 @@ definitions:
     type: object
   models.Expense:
     properties:
+      account:
+        allOf:
+        - $ref: '#/definitions/models.Account'
+        description: Relations
+      account_id:
+        description: Account used for payment
+        type: string
       amount:
         type: number
       category:
-        allOf:
-        - $ref: '#/definitions/models.ExpenseCategory'
-        description: Relations
+        $ref: '#/definitions/models.ExpenseCategory'
       category_id:
         type: string
       created_at:
@@ -214,6 +502,9 @@ definitions:
         type: array
       created_at:
         type: string
+      daily_amount:
+        description: Only for DAILY_CONTINUOUS
+        type: number
       expenses:
         items:
           $ref: '#/definitions/models.Expense'
@@ -236,8 +527,14 @@ definitions:
     type: object
   models.Income:
     properties:
-      allocations:
+      account:
+        allOf:
+        - $ref: '#/definitions/models.Account'
         description: Relations
+      account_id:
+        description: Source account
+        type: string
+      allocations:
         items:
           $ref: '#/definitions/models.BudgetAllocation'
         type: array
@@ -330,6 +627,234 @@ info:
   title: Finance Tracking API
   version: "1.0"
 paths:
+  /accounts:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create a new account
+      tags:
+      - accounts
+  /accounts/{id}:
+    get:
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get account by ID
+      tags:
+      - accounts
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Account update data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Update account details
+      tags:
+      - accounts
+  /accounts/{id}/archive:
+    post:
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Archive an account
+      tags:
+      - accounts
+  /accounts/{id}/spent:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Expense data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SpentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Record an expense from an account
+      tags:
+      - accounts
+  /accounts/{id}/summary:
+    get:
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get account balance summary for a specific month
+      tags:
+      - accounts
+  /accounts/{id}/topup:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Top-up data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.TopUpRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Add funds (income) to an account
+      tags:
+      - accounts
+  /accounts/{id}/transfer:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Source Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Transfer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AccountTransferRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Transfer funds from this account to another
+      tags:
+      - accounts
+  /accounts/{id}/transfers:
+    get:
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get transfer history for a specific account
+      tags:
+      - accounts
+  /accounts/summary:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get all accounts overview with total balance
+      tags:
+      - accounts
   /alerts:
     get:
       description: Get all budget alerts with current status
@@ -1161,6 +1686,140 @@ paths:
       summary: Update income
       tags:
       - income
+  /notifications/register-device:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Device registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterDeviceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Register a device for push notifications (store player ID)
+      tags:
+      - notifications
+  /notifications/settings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get all notification settings
+      tags:
+      - notifications
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Notification setting data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateNotificationSettingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Create a push notification setting
+      tags:
+      - notifications
+  /notifications/settings/{id}:
+    delete:
+      parameters:
+      - description: Setting ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Delete a notification setting
+      tags:
+      - notifications
+    get:
+      parameters:
+      - description: Setting ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get notification setting by ID
+      tags:
+      - notifications
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Setting ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateNotificationSettingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Update a notification setting
+      tags:
+      - notifications
+  /notifications/test:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Test notification data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.TestNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Send a test push notification
+      tags:
+      - notifications
   /reports/monthly:
     get:
       description: Get comprehensive financial report for a specific month
@@ -1287,6 +1946,141 @@ paths:
       summary: Export yearly financial report
       tags:
       - reports
+  /scheduled-funds:
+    get:
+      parameters:
+      - description: Filter active only
+        in: query
+        name: active_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get all scheduled funds
+      tags:
+      - scheduled-funds
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Scheduled fund data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateScheduledFundRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Create a recurring scheduled fund
+      tags:
+      - scheduled-funds
+  /scheduled-funds/{id}:
+    delete:
+      parameters:
+      - description: Scheduled Fund ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Delete a scheduled fund
+      tags:
+      - scheduled-funds
+    get:
+      parameters:
+      - description: Scheduled Fund ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get a scheduled fund by ID
+      tags:
+      - scheduled-funds
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Scheduled Fund ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateScheduledFundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Update a scheduled fund
+      tags:
+      - scheduled-funds
+  /statistics/monthly:
+    get:
+      parameters:
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get monthly income/expense statistics for a year
+      tags:
+      - statistics
+  /statistics/overview:
+    get:
+      parameters:
+      - description: 'Month (1-12, default: current month)'
+        in: query
+        name: month
+        type: integer
+      - description: 'Year (default: current year)'
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get financial overview for a specific month
+      tags:
+      - statistics
   /transactions:
     get:
       description: Get combined income and expense transactions with filtering and
@@ -1347,6 +2141,108 @@ paths:
       summary: Get combined transaction history
       tags:
       - transactions
+  /transfers:
+    get:
+      parameters:
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get all transfers
+      tags:
+      - transfers
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Transfer data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTransferRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Transfer funds between accounts
+      tags:
+      - transfers
+  /transfers/{id}:
+    delete:
+      parameters:
+      - description: Transfer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Cancel a transfer (within 24 hours)
+      tags:
+      - transfers
+    get:
+      parameters:
+      - description: Transfer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get transfer by ID
+      tags:
+      - transfers
+  /transfers/account:
+    get:
+      parameters:
+      - description: Account ID
+        in: query
+        name: account_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Get transfers for a specific account
+      tags:
+      - transfers
 schemes:
 - http
 - https

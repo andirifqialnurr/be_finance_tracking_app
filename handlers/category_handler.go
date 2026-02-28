@@ -56,6 +56,7 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		Name:               req.Name,
 		Type:               req.Type,
 		MonthlyBudget:      req.MonthlyBudget,
+		DailyAmount:        req.DailyAmount,
 		AllocationPriority: req.AllocationPriority,
 		Metadata:           datatypes.JSON(metadata),
 	}
@@ -194,6 +195,7 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		Name:               req.Name,
 		Type:               req.Type,
 		MonthlyBudget:      req.MonthlyBudget,
+		DailyAmount:        req.DailyAmount,
 		AllocationPriority: req.AllocationPriority,
 		Metadata:           datatypes.JSON(metadata),
 	}
@@ -253,7 +255,8 @@ func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
 type CreateCategoryRequest struct {
 	Name               string                 `json:"name" binding:"required"`
 	Type               string                 `json:"type" binding:"required"`
-	MonthlyBudget      float64                `json:"monthly_budget" binding:"required"`
+	MonthlyBudget      float64                `json:"monthly_budget"`
+	DailyAmount        *float64               `json:"daily_amount"` // required for DAILY_CONTINUOUS
 	AllocationPriority int                    `json:"allocation_priority"`
 	Metadata           map[string]interface{} `json:"metadata"`
 }
@@ -262,6 +265,7 @@ type UpdateCategoryRequest struct {
 	Name               string                 `json:"name"`
 	Type               string                 `json:"type"`
 	MonthlyBudget      float64                `json:"monthly_budget"`
+	DailyAmount        *float64               `json:"daily_amount"`
 	AllocationPriority int                    `json:"allocation_priority"`
 	Metadata           map[string]interface{} `json:"metadata"`
 }

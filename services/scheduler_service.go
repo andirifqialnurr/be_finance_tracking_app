@@ -10,18 +10,24 @@ import (
 
 // SchedulerService handles scheduled tasks like monthly report generation
 type SchedulerService struct {
-	reportService ReportService
-	cron          *cron.Cron
+	reportService        ReportService
+	scheduledFundService ScheduledFundService
+	notificationService  NotificationService
+	cron                 *cron.Cron
 }
 
 // NewSchedulerService creates a new scheduler service
-func NewSchedulerService(reportService ReportService) *SchedulerService {
-	// Create cron with second precision
+func NewSchedulerService(
+	reportService ReportService,
+	scheduledFundService ScheduledFundService,
+	notificationService NotificationService,
+) *SchedulerService {
 	c := cron.New(cron.WithSeconds())
-
 	return &SchedulerService{
-		reportService: reportService,
-		cron:          c,
+		reportService:        reportService,
+		scheduledFundService: scheduledFundService,
+		notificationService:  notificationService,
+		cron:                 c,
 	}
 }
 
@@ -29,8 +35,7 @@ func NewSchedulerService(reportService ReportService) *SchedulerService {
 func (s *SchedulerService) Start() {
 	log.Println("Starting scheduler service...")
 
-	// Schedule monthly report generation
-	// Runs on the 1st day of every month at 00:01:00
+	// Schedule monthly report generation - 1st day of month at 00:01:00
 	_, err := s.cron.AddFunc("0 1 0 1 * *", s.GenerateMonthlyReport)
 	if err != nil {
 		log.Printf("Error scheduling monthly report generation: %v", err)
@@ -38,11 +43,21 @@ func (s *SchedulerService) Start() {
 		log.Println("Scheduled: Monthly report generation (1st day of month at 00:01:00)")
 	}
 
-	// For testing: Run every day at midnight
-	// _, err = s.cron.AddFunc("0 0 0 * * *", s.GenerateMonthlyReport)
+	// Execute due scheduled funds - daily at 08:00:00
+	_, err = s.cron.AddFunc("0 0 8 * * *", s.ExecuteScheduledFunds)
+	if err != nil {
+		log.Printf("Error scheduling fund execution: %v", err)
+	} else {
+		log.Println("Scheduled: Scheduled fund execution (daily at 08:00)")
+	}
 
-	// For testing: Run every minute (uncomment for testing)
-	// _, err = s.cron.AddFunc("0 * * * * *", s.GenerateMonthlyReport)
+	// Send due push notifications - every minute
+	_, err = s.cron.AddFunc("0 * * * * *", s.SendDueNotifications)
+	if err != nil {
+		log.Printf("Error scheduling notifications: %v", err)
+	} else {
+		log.Println("Scheduled: Push notification delivery (every minute)")
+	}
 
 	s.cron.Start()
 	log.Println("Scheduler service started successfully")
@@ -83,6 +98,21 @@ func (s *SchedulerService) GenerateMonthlyReport() {
 	// TODO: Optionally generate and store PDF/Excel files
 
 	log.Printf("Monthly report generation completed successfully")
+}
+
+// ExecuteScheduledFunds runs due scheduled top-ups and transfers
+func (s *SchedulerService) ExecuteScheduledFunds() {
+	log.Println("Running scheduled fund execution...")
+	if err := s.scheduledFundService.ExecuteDueFunds(); err != nil {
+		log.Printf("Error executing scheduled funds: %v", err)
+	}
+}
+
+// SendDueNotifications sends push notifications whose time has come
+func (s *SchedulerService) SendDueNotifications() {
+	if err := s.notificationService.CheckAndSendDue(); err != nil {
+		log.Printf("Error sending notifications: %v", err)
+	}
 }
 
 // ManualGenerateMonthlyReport allows manual trigger of monthly report generation

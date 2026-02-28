@@ -41,9 +41,18 @@ func (s *categoryService) CreateCategory(category *models.ExpenseCategory) (*mod
 		return nil, errors.New("invalid category type")
 	}
 
-	// Validate monthly budget
-	if category.MonthlyBudget <= 0 {
-		return nil, errors.New("monthly budget must be greater than 0")
+	// For DAILY_CONTINUOUS, require daily_amount; compute monthly_budget as daily × 30 placeholder
+	if category.Type == models.CategoryTypeDailyContinuous {
+		if category.DailyAmount == nil || *category.DailyAmount <= 0 {
+			return nil, errors.New("daily_amount is required and must be > 0 for DAILY_CONTINUOUS category")
+		}
+		// Store 30-day placeholder; actual allocation uses real days_in_month
+		category.MonthlyBudget = *category.DailyAmount * 30
+	} else {
+		// All other types require monthly_budget
+		if category.MonthlyBudget <= 0 {
+			return nil, errors.New("monthly_budget must be greater than 0")
+		}
 	}
 
 	// Set default values
@@ -85,7 +94,13 @@ func (s *categoryService) UpdateCategory(id uuid.UUID, updatedCategory *models.E
 	if updatedCategory.Type != "" {
 		category.Type = updatedCategory.Type
 	}
-	if updatedCategory.MonthlyBudget > 0 {
+	// For DAILY_CONTINUOUS: update daily_amount and recompute monthly_budget
+	if category.Type == models.CategoryTypeDailyContinuous {
+		if updatedCategory.DailyAmount != nil && *updatedCategory.DailyAmount > 0 {
+			category.DailyAmount = updatedCategory.DailyAmount
+			category.MonthlyBudget = *updatedCategory.DailyAmount * 30
+		}
+	} else if updatedCategory.MonthlyBudget > 0 {
 		category.MonthlyBudget = updatedCategory.MonthlyBudget
 	}
 	if updatedCategory.AllocationPriority > 0 {
